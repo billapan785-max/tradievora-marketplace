@@ -1,0 +1,134 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "User profile containing balances and role information.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "displayName": { "type": "string" },
+        "role": { "type": "string", "enum": ["buyer", "seller", "admin"] },
+        "availableBalance": { "type": "number", "description": "USDT available for withdrawal or purchase" },
+        "escrowBalance": { "type": "number", "description": "USDT currently held in active orders" },
+        "withdrawableBalance": { "type": "number", "description": "USDT that can be requested for withdrawal" },
+        "isSuspended": { "type": "boolean" },
+        "isVerified": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "role"]
+    },
+    "Listing": {
+      "title": "Marketplace Listing",
+      "description": "Digital accounts or services for sale.",
+      "type": "object",
+      "properties": {
+        "sellerId": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "price": { "type": "number" },
+        "category": { "type": "string" },
+        "deliveryMethod": { "type": "string" },
+        "deliveryTime": { "type": "string" },
+        "status": { "type": "string", "enum": ["active", "sold", "inactive"] },
+        "isFeatured": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["sellerId", "title", "price", "category"]
+    },
+    "Order": {
+      "title": "Marketplace Order",
+      "description": "Transaction between buyer and seller with escrow.",
+      "type": "object",
+      "properties": {
+        "buyerId": { "type": "string" },
+        "sellerId": { "type": "string" },
+        "listingId": { "type": "string" },
+        "amount": { "type": "number" },
+        "escrowFee": { "type": "number" },
+        "status": { "type": "string", "enum": ["pending", "delivered", "confirmed", "disputed", "refunded", "released"] },
+        "deliveryDetails": { "type": "string", "description": "Sensitive account details delivered by seller" },
+        "disputeReason": { "type": "string" },
+        "adminDecision": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["buyerId", "sellerId", "listingId", "amount", "status"]
+    },
+    "Deposit": {
+      "title": "USDT Deposit",
+      "description": "Manual USDT deposit request.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "amount": { "type": "number" },
+        "txid": { "type": "string" },
+        "network": { "type": "string", "enum": ["TRC20", "ERC20"] },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "adminNote": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "amount", "txid", "status"]
+    },
+    "Withdrawal": {
+      "title": "USDT Withdrawal",
+      "description": "Manual USDT withdrawal request.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "amount": { "type": "number" },
+        "walletAddress": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "completed", "rejected"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "amount", "walletAddress", "status"]
+    },
+    "Message": {
+      "title": "Order Message",
+      "description": "Secure messaging between buyer and seller.",
+      "type": "object",
+      "properties": {
+        "orderId": { "type": "string" },
+        "senderId": { "type": "string" },
+        "text": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["orderId", "senderId", "text"]
+    },
+    "Review": {
+      "title": "Seller Review",
+      "description": "Buyer review for a completed order.",
+      "type": "object",
+      "properties": {
+        "orderId": { "type": "string" },
+        "buyerId": { "type": "string" },
+        "sellerId": { "type": "string" },
+        "rating": { "type": "number" },
+        "comment": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["orderId", "buyerId", "sellerId", "rating"]
+    },
+    "Settings": {
+      "title": "Platform Settings",
+      "description": "Admin-controlled platform settings.",
+      "type": "object",
+      "properties": {
+        "adminWalletTRC20": { "type": "string" },
+        "adminWalletERC20": { "type": "string" },
+        "marketplaceFeePercent": { "type": "number" },
+        "announcement": { "type": "string" }
+      }
+    }
+  },
+  "firestore": {
+    "/users/{userId}": { "schema": "User", "description": "User profiles" },
+    "/listings/{listingId}": { "schema": "Listing", "description": "Marketplace listings" },
+    "/orders/{orderId}": { "schema": "Order", "description": "Escrow orders" },
+    "/deposits/{depositId}": { "schema": "Deposit", "description": "Deposit requests" },
+    "/withdrawals/{withdrawalId}": { "schema": "Withdrawal", "description": "Withdrawal requests" },
+    "/messages/{messageId}": { "schema": "Message", "description": "Chat messages" },
+    "/reviews/{reviewId}": { "schema": "Review", "description": "Seller reviews" },
+    "/settings/platform": { "schema": "Settings", "description": "Global settings" }
+  }
+}

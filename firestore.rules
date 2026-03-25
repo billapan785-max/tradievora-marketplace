@@ -1,0 +1,205 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Fields: uid, email, role, availableBalance, escrowBalance, withdrawableBalance, isSuspended, isVerified, referrerId, referralChain, createdAt
+    //
+    // Collection: influencers
+    // Fields: uid, username, totalReferrals, totalSales, totalVolume, totalEarnings, pendingEarnings, withdrawnBalance, clicks, rank, levelEarnings
+    //
+    // Collection: referrals
+    // Fields: id, influencerId, referredUserId, referredUserEmail, level, createdAt
+    //
+    // Collection: commissions
+    // Fields: id, orderId, influencerId, amount, level, status, createdAt
+    //
+    // Collection: videos
+    // Fields: id, influencerId, influencerName, url, title, platform, description, views, bonusEarned, referralSales, status, bonusStatus, createdAt, updatedAt
+    //
+    // Collection: listings
+    // Fields: sellerId, title, description, price, category, deliveryMethod, deliveryTime, status, isFeatured, createdAt
+    //
+    // Collection: orders
+    // Fields: buyerId, sellerId, listingId, amount, escrowFee, status, deliveryDetails, disputeReason, adminDecision, createdAt, updatedAt
+    //
+    // Collection: deposits
+    // Fields: userId, amount, txid, network, status, adminNote, createdAt
+    //
+    // Collection: withdrawals
+    // Fields: userId, amount, walletAddress, status, createdAt
+    //
+    // Collection: messages
+    // Fields: orderId, senderId, text, createdAt
+    //
+    // Collection: reviews
+    // Fields: orderId, buyerId, sellerId, rating, comment, createdAt
+    //
+    // Collection: settings
+    // Fields: adminWalletTRC20, adminWalletERC20, marketplaceFeePercent, announcement, minWithdrawal, referralCommissionLevels, videoBonusStructure
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && 
+        (
+          (request.auth.token.email == "megadigital000004@gmail.com" && request.auth.token.email_verified == true) ||
+          (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
+        );
+    }
+
+    function isSuspended() {
+      return isAuthenticated() && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('isSuspended', false) == true;
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    // ===============================================================
+    // Collection Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow get: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isAuthenticated() && request.auth.uid == userId && 
+                      (request.resource.data.role == 'buyer' || (request.auth.token.email == "megadigital000004@gmail.com" && request.resource.data.role == 'admin')) &&
+                      request.resource.data.availableBalance == 0 &&
+                      request.resource.data.isSuspended == false;
+      allow update: if isAuthenticated() && (
+        isAdmin() || 
+        (request.auth.uid == userId && 
+         (request.resource.data.role == resource.data.role || (resource.data.role == 'buyer' && request.resource.data.role == 'influencer')) && 
+         request.resource.data.isSuspended == resource.data.isSuspended &&
+         (request.resource.data.availableBalance + request.resource.data.escrowBalance <= 
+          resource.data.availableBalance + resource.data.escrowBalance) &&
+         request.resource.data.withdrawableBalance == resource.data.withdrawableBalance)
+      );
+    }
+
+    match /influencers/{influencerId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && request.auth.uid == influencerId;
+      allow update: if isAdmin() || 
+                      (isAuthenticated() && request.auth.uid == influencerId) ||
+                      (isAuthenticated() && 
+                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['totalReferrals']) &&
+                       request.resource.data.totalReferrals == resource.data.totalReferrals + 1);
+    }
+
+    match /referrals/{referralId} {
+      allow read: if isAdmin() || (isAuthenticated() && resource.data.influencerId == request.auth.uid);
+      allow create: if isAuthenticated();
+      allow update: if isAdmin();
+    }
+
+    match /commissions/{commissionId} {
+      allow read: if isAdmin() || (isAuthenticated() && resource.data.influencerId == request.auth.uid);
+      allow create: if isAdmin() || isAuthenticated(); // Allow creation during order release
+      allow update: if isAdmin();
+    }
+
+    match /videos/{videoId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && !isSuspended() && 
+                      request.resource.data.influencerId == request.auth.uid;
+      allow update: if isAdmin() || (isAuthenticated() && !isSuspended() && 
+                      resource.data.influencerId == request.auth.uid);
+    }
+
+    match /listings/{listingId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && !isSuspended() && 
+                      request.resource.data.sellerId == request.auth.uid;
+      allow update: if isAdmin() || (isAuthenticated() && !isSuspended() && 
+                      resource.data.sellerId == request.auth.uid);
+      allow delete: if isAdmin() || (isAuthenticated() && !isSuspended() && 
+                      resource.data.sellerId == request.auth.uid);
+    }
+
+    match /orders/{orderId} {
+      allow read: if isAuthenticated() && (request.auth.uid == resource.data.buyerId || 
+                                           request.auth.uid == resource.data.sellerId || 
+                                           isAdmin());
+      allow create: if isAuthenticated() && !isSuspended() && 
+                      request.resource.data.buyerId == request.auth.uid;
+      allow update: if isAdmin() || (isAuthenticated() && !isSuspended() && 
+                      (request.auth.uid == resource.data.buyerId || 
+                       request.auth.uid == resource.data.sellerId));
+    }
+
+    match /deposits/{depositId} {
+      allow read: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+      allow create: if isAuthenticated() && !isSuspended() && 
+                      request.resource.data.userId == request.auth.uid &&
+                      request.resource.data.status == 'pending';
+      allow update: if isAdmin();
+    }
+
+    match /withdrawals/{withdrawalId} {
+      allow read: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+      allow create: if isAuthenticated() && !isSuspended() && 
+                      request.resource.data.userId == request.auth.uid &&
+                      request.resource.data.status == 'pending';
+      allow update: if isAdmin();
+    }
+
+    match /messages/{messageId} {
+      allow read: if isAuthenticated() && (
+        isAdmin() ||
+        (resource.data.orderId != null && exists(/databases/$(database)/documents/orders/$(resource.data.orderId)) &&
+         (get(/databases/$(database)/documents/orders/$(resource.data.orderId)).data.buyerId == request.auth.uid ||
+          get(/databases/$(database)/documents/orders/$(resource.data.orderId)).data.sellerId == request.auth.uid)) ||
+        (resource.data.participants.hasAny([request.auth.uid]))
+      );
+      allow create: if isAuthenticated() && !isSuspended() && 
+                      request.resource.data.senderId == request.auth.uid &&
+                      request.resource.data.participants.hasAny([request.auth.uid]) &&
+                      !request.resource.data.text.matches(".*[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}.*") &&
+                      !request.resource.data.text.matches(".*(\\+?\\d{1,3}[- ]?)?\\d{10}.*");
+    }
+
+    match /reviews/{reviewId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && !isSuspended() && 
+                      request.resource.data.buyerId == request.auth.uid;
+    }
+
+    match /support_tickets/{ticketId} {
+      allow read, update: if isAuthenticated() && (request.auth.uid == ticketId || isAdmin());
+      allow create: if isAuthenticated() && request.auth.uid == ticketId;
+    }
+
+    match /support_messages/{messageId} {
+      allow read: if isAuthenticated() && (request.auth.uid == resource.data.ticketId || isAdmin());
+      allow create: if isAuthenticated() && (request.auth.uid == request.resource.data.ticketId || isAdmin());
+    }
+
+    match /settings/{settingId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+  }
+}
