@@ -2,7 +2,7 @@ import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
 import { auth } from '../lib/firebase';
-import { ShoppingCart, Wallet, User, LogOut, Shield, MessageSquare, Package } from 'lucide-react';
+import { ShoppingCart, Wallet, User, LogOut, Shield, MessageSquare, Package, BadgeCheck } from 'lucide-react';
 import { Logo } from './Logo';
 
 const Navbar: React.FC = () => {
@@ -46,6 +46,9 @@ const Navbar: React.FC = () => {
                   <button className="flex items-center text-zinc-300 hover:text-white px-3 py-2 text-sm font-medium">
                     <User className="h-5 w-5 mr-1" />
                     <span>{profile?.displayName}</span>
+                    {profile?.isVerified && (
+                      <BadgeCheck className="h-4 w-4 ml-1 text-blue-500" />
+                    )}
                     {profile?.role === 'admin' && (
                       <span className="ml-2 px-1.5 py-0.5 bg-orange-600 text-[10px] font-black text-white rounded uppercase tracking-tighter">Admin</span>
                     )}

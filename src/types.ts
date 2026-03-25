@@ -71,6 +71,7 @@ export interface Listing {
   id: string;
   sellerId: string;
   sellerName?: string;
+  sellerIsVerified?: boolean;
   title: string;
   description: string;
   price: number;
@@ -90,6 +91,7 @@ export interface Order {
   listingTitle: string;
   amount: number;
   escrowFee: number;
+  featuredFee?: number;
   status: 'pending' | 'delivered' | 'confirmed' | 'disputed' | 'refunded' | 'released';
   deliveryDetails?: string;
   disputeReason?: string;

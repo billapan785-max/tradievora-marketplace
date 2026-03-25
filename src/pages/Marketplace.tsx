@@ -3,7 +3,7 @@ import { collection, query, where, onSnapshot, orderBy } from 'firebase/firestor
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { Listing } from '../types';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Search, Filter, Tag, Clock, User, Star } from 'lucide-react';
+import { Search, Filter, Tag, Clock, User, Star, BadgeCheck } from 'lucide-react';
 
 const Marketplace: React.FC = () => {
   const [listings, setListings] = useState<Listing[]>([]);
@@ -42,10 +42,12 @@ const Marketplace: React.FC = () => {
     return () => unsubscribe();
   }, [categoryFilter]);
 
-  const filteredListings = listings.filter(l => 
-    l.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    l.description.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredListings = listings
+    .filter(l => 
+      l.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
+      l.description.toLowerCase().includes(searchTerm.toLowerCase())
+    )
+    .sort((a, b) => (b.isFeatured ? 1 : 0) - (a.isFeatured ? 1 : 0));
 
   return (
     <div className="space-y-8">
@@ -128,9 +130,17 @@ const Marketplace: React.FC = () => {
                 >
                   <div className="p-6 flex-1 flex flex-col">
                     <div className="flex justify-between items-start mb-4">
-                      <span className="px-2 py-1 bg-zinc-800 text-zinc-400 text-[10px] font-bold uppercase rounded tracking-wider">
-                        {listing.category}
-                      </span>
+                      <div className="flex gap-2">
+                        <span className="px-2 py-1 bg-zinc-800 text-zinc-400 text-[10px] font-bold uppercase rounded tracking-wider">
+                          {listing.category}
+                        </span>
+                        {listing.isFeatured && (
+                          <span className="px-2 py-1 bg-orange-900/20 text-orange-500 text-[10px] font-bold uppercase rounded tracking-wider flex items-center">
+                            <Star className="h-3 w-3 mr-1 fill-current" />
+                            Featured
+                          </span>
+                        )}
+                      </div>
                       <div className="flex items-center text-orange-500 text-xs font-bold">
                         <Star className="h-3 w-3 fill-current mr-1" />
                         4.9
@@ -149,7 +159,10 @@ const Marketplace: React.FC = () => {
                       </div>
                       <div className="flex items-center">
                         <User className="h-3 w-3 mr-1" />
-                        {listing.sellerName || 'Verified Seller'}
+                        <span className="truncate max-w-[100px]">{listing.sellerName || 'Verified Seller'}</span>
+                        {listing.sellerIsVerified && (
+                          <BadgeCheck className="h-3 w-3 ml-1 text-blue-500 flex-shrink-0" />
+                        )}
                       </div>
                     </div>
                   </div>

@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, onSnapshot, doc, updateDoc, increment, getDoc, setDoc, where, addDoc, orderBy } from 'firebase/firestore';
+import { collection, query, onSnapshot, doc, updateDoc, increment, getDoc, setDoc, where, addDoc, orderBy, getDocs } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { useAuth } from '../AuthContext';
 import { Deposit, Withdrawal, UserProfile, PlatformSettings, Order, Listing, InfluencerProfile, VideoPromotion, Commission, SupportTicket, SupportMessage } from '../types';
-import { Shield, Users, CreditCard, Settings, Check, X, AlertCircle, TrendingUp, Video, DollarSign, Award, ExternalLink, MessageSquare, Send, User } from 'lucide-react';
+import { Shield, Users, CreditCard, Settings, Check, X, AlertCircle, TrendingUp, Video, DollarSign, Award, ExternalLink, MessageSquare, Send, User, BadgeCheck } from 'lucide-react';
 import { toast } from 'sonner';
 
 const AdminPanel: React.FC = () => {
@@ -271,6 +271,25 @@ const AdminPanel: React.FC = () => {
     }
   };
 
+  const handleToggleVerification = async (user: UserProfile) => {
+    try {
+      const newStatus = !user.isVerified;
+      await updateDoc(doc(db, 'users', user.uid), { isVerified: newStatus });
+      
+      // Update all listings for this user
+      const q = query(collection(db, 'listings'), where('sellerId', '==', user.uid));
+      const snapshot = await getDocs(q);
+      const updatePromises = snapshot.docs.map(listingDoc => 
+        updateDoc(doc(db, 'listings', listingDoc.id), { sellerIsVerified: newStatus })
+      );
+      await Promise.all(updatePromises);
+
+      toast.success(`User ${newStatus ? 'verified' : 'unverified'}`);
+    } catch (error) {
+      toast.error('Failed to update user verification status');
+    }
+  };
+
   const handleDeleteListing = async (id: string) => {
     if (window.confirm('Admin: Are you sure you want to delete this listing?')) {
       try {
@@ -296,7 +315,8 @@ const AdminPanel: React.FC = () => {
       } else {
         const sellerRef = doc(db, 'users', order.sellerId);
         const buyerRef = doc(db, 'users', order.buyerId);
-        await updateDoc(sellerRef, { withdrawableBalance: increment(order.amount - order.escrowFee) });
+        const totalFees = order.escrowFee + (order.featuredFee || 0);
+        await updateDoc(sellerRef, { withdrawableBalance: increment(order.amount - totalFees) });
         await updateDoc(orderRef, { status: 'released', adminDecision: 'Released by Admin' });
         
         // Distribute Commissions
@@ -724,7 +744,10 @@ const AdminPanel: React.FC = () => {
                       <div className="text-xs text-zinc-500">{l.category}</div>
                     </td>
                     <td className="px-6 py-4">
-                      <div className="text-zinc-400 text-sm">{l.sellerName}</div>
+                      <div className="text-zinc-400 text-sm flex items-center">
+                        {l.sellerName}
+                        {l.sellerIsVerified && <BadgeCheck className="h-3 w-3 ml-1 text-blue-500" />}
+                      </div>
                     </td>
                     <td className="px-6 py-4 text-white font-mono">{l.price} USDT</td>
                     <td className="px-6 py-4">
@@ -817,7 +840,10 @@ const AdminPanel: React.FC = () => {
                 {users.map(u => (
                   <tr key={u.uid} className="hover:bg-zinc-800/30 transition-colors">
                     <td className="px-6 py-4">
-                      <div className="text-white font-bold">{u.displayName}</div>
+                      <div className="text-white font-bold flex items-center">
+                        {u.displayName}
+                        {u.isVerified && <BadgeCheck className="h-4 w-4 ml-1 text-blue-500" />}
+                      </div>
                       <div className="text-xs text-zinc-500">{u.email}</div>
                     </td>
                     <td className="px-6 py-4">
@@ -831,7 +857,15 @@ const AdminPanel: React.FC = () => {
                         {u.isSuspended ? 'Suspended' : 'Active'}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-right">
+                    <td className="px-6 py-4 text-right flex justify-end gap-2">
+                      <button
+                        onClick={() => handleToggleVerification(u)}
+                        className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                          u.isVerified ? 'bg-zinc-700 hover:bg-zinc-600 text-white' : 'bg-blue-600 hover:bg-blue-700 text-white'
+                        }`}
+                      >
+                        {u.isVerified ? 'Unverify' : 'Verify'}
+                      </button>
                       <button
                         onClick={() => handleToggleSuspension(u)}
                         className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${

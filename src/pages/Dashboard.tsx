@@ -3,7 +3,7 @@ import { collection, query, where, onSnapshot, addDoc, doc, updateDoc, deleteDoc
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { useAuth } from '../AuthContext';
 import { Listing, Order } from '../types';
-import { Plus, Package, ShoppingBag, TrendingUp, Edit, Trash2, ExternalLink, Shield } from 'lucide-react';
+import { Plus, Package, ShoppingBag, TrendingUp, Edit, Trash2, ExternalLink, Shield, BadgeCheck } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 
@@ -22,7 +22,8 @@ const Dashboard: React.FC = () => {
     price: '',
     category: 'eBay Accounts',
     deliveryMethod: 'Instant',
-    deliveryTime: '1 Hour'
+    deliveryTime: '1 Hour',
+    isFeatured: false
   });
 
   useEffect(() => {
@@ -81,8 +82,9 @@ const Dashboard: React.FC = () => {
         price: parseFloat(newListing.price),
         sellerId: profile.uid,
         sellerName: profile.displayName,
+        sellerIsVerified: profile.isVerified || false,
         status: 'active',
-        isFeatured: false,
+        isFeatured: newListing.isFeatured,
         createdAt: new Date().toISOString()
       });
       toast.success('Listing created successfully!');
@@ -93,7 +95,8 @@ const Dashboard: React.FC = () => {
         price: '',
         category: 'eBay Accounts',
         deliveryMethod: 'Instant',
-        deliveryTime: '1 Hour'
+        deliveryTime: '1 Hour',
+        isFeatured: false
       });
     } catch (error) {
       toast.error('Failed to create listing');
@@ -111,6 +114,15 @@ const Dashboard: React.FC = () => {
     }
   };
 
+  const handleToggleFeatured = async (listing: Listing) => {
+    try {
+      await updateDoc(doc(db, 'listings', listing.id), { isFeatured: !listing.isFeatured });
+      toast.success(`Listing ${listing.isFeatured ? 'unfeatured' : 'featured'} successfully!`);
+    } catch (error) {
+      toast.error('Failed to update listing feature status');
+    }
+  };
+
   const isSeller = profile?.role === 'seller';
   const isAdmin = profile?.role === 'admin';
 
@@ -118,8 +130,11 @@ const Dashboard: React.FC = () => {
     <div className="space-y-8">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-white">
+          <h1 className="text-3xl font-bold text-white flex items-center">
             {isAdmin ? 'Admin Dashboard' : isSeller ? 'Seller Dashboard' : 'Buyer Dashboard'}
+            {profile?.isVerified && (
+              <BadgeCheck className="h-6 w-6 ml-2 text-blue-500" />
+            )}
           </h1>
           <p className="text-zinc-500">
             {isAdmin ? 'Overview of platform activity' : isSeller ? 'Manage your listings and sales' : 'Track your purchases and balance'}
@@ -262,6 +277,14 @@ const Dashboard: React.FC = () => {
                       </span>
                     </td>
                     <td className="px-6 py-4 text-right space-x-2">
+                      <button
+                        onClick={() => handleToggleFeatured(listing)}
+                        className={`inline-block p-2 transition-colors ${
+                          listing.isFeatured ? 'text-orange-500 hover:text-orange-400' : 'text-zinc-400 hover:text-orange-500'
+                        }`}
+                      >
+                        <BadgeCheck className="h-4 w-4" />
+                      </button>
                       <Link to={`/listing/${listing.id}`} className="inline-block p-2 text-zinc-400 hover:text-white transition-colors">
                         <ExternalLink className="h-4 w-4" />
                       </Link>
@@ -419,6 +442,24 @@ const Dashboard: React.FC = () => {
                     value={newListing.description}
                     onChange={e => setNewListing({...newListing, description: e.target.value})}
                   ></textarea>
+                </div>
+                <div className="md:col-span-2 flex items-center bg-orange-900/10 border border-orange-500/20 p-4 rounded-xl">
+                  <input
+                    type="checkbox"
+                    id="isFeatured"
+                    className="w-5 h-5 rounded border-zinc-700 text-orange-600 focus:ring-orange-500 bg-zinc-800"
+                    checked={newListing.isFeatured}
+                    onChange={e => setNewListing({...newListing, isFeatured: e.target.checked})}
+                  />
+                  <label htmlFor="isFeatured" className="ml-3 flex flex-col cursor-pointer">
+                    <span className="text-white font-bold flex items-center">
+                      Feature this listing
+                      <BadgeCheck className="h-4 w-4 ml-1 text-orange-500" />
+                    </span>
+                    <span className="text-xs text-orange-500/80 mt-1">
+                      Your listing will appear at the top of the marketplace. An extra 10% fee will be deducted when this listing is sold.
+                    </span>
+                  </label>
                 </div>
               </div>
               <div className="flex gap-4 pt-4">

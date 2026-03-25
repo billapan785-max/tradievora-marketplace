@@ -70,8 +70,9 @@ const Orders: React.FC = () => {
           escrowBalance: increment(-order.amount)
         });
 
+        const totalFees = order.escrowFee + (order.featuredFee || 0);
         await updateDoc(sellerRef, {
-          availableBalance: increment(order.amount - order.escrowFee)
+          availableBalance: increment(order.amount - totalFees)
         });
 
         // 3. Distribute Commissions

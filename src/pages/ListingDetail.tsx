@@ -4,7 +4,7 @@ import { doc, getDoc, addDoc, collection, updateDoc, increment } from 'firebase/
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { Listing, UserProfile, Order } from '../types';
 import { useAuth } from '../AuthContext';
-import { Shield, Clock, User, Star, CheckCircle, AlertCircle, ShoppingCart } from 'lucide-react';
+import { Shield, Clock, User, Star, CheckCircle, AlertCircle, ShoppingCart, BadgeCheck } from 'lucide-react';
 import { toast } from 'sonner';
 
 const ListingDetail: React.FC = () => {
@@ -62,6 +62,7 @@ const ListingDetail: React.FC = () => {
         listingTitle: listing.title,
         amount: listing.price,
         escrowFee: listing.price * 0.05, // 5% fee
+        featuredFee: listing.isFeatured ? listing.price * 0.10 : 0, // 10% extra fee if featured
         status: 'pending',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -164,7 +165,9 @@ const ListingDetail: React.FC = () => {
             <div className="ml-4">
               <div className="flex items-center">
                 <h3 className="text-white font-bold">{listing.sellerName || 'Seller'}</h3>
-                {/* seller?.isVerified check would require denormalization or a public profile */}
+                {listing.sellerIsVerified && (
+                  <BadgeCheck className="h-4 w-4 ml-1 text-blue-500" />
+                )}
               </div>
               <p className="text-zinc-500 text-xs">Joined Recently</p>
               <div className="flex items-center mt-1 text-orange-500 text-xs font-bold">
