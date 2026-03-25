@@ -1,0 +1,42 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+}
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  @apply bg-zinc-950 text-zinc-100;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-zinc-950;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-zinc-800 rounded-full hover:bg-zinc-700 transition-colors;
+}
+
+.glass {
+  @apply bg-zinc-900/50 backdrop-blur-md border border-zinc-800;
+}
+
+.prose {
+  @apply text-zinc-400;
+}
+
+.prose h1, .prose h2, .prose h3, .prose h4 {
+  @apply text-white font-bold;
+}
+
+.prose strong {
+  @apply text-white;
+}
