@@ -143,7 +143,7 @@ const Orders: React.FC = () => {
       await addDoc(collection(db, 'timeline'), {
         orderId: order.id,
         type: 'dispute_opened',
-        description: `Dispute opened: ${reason}`,
+        description: `Dispute opened by ${profile?.uid === order.buyerId ? 'Buyer' : 'Seller'}: ${reason}`,
         userId: profile?.uid,
         createdAt: new Date().toISOString(),
       });
@@ -154,17 +154,17 @@ const Orders: React.FC = () => {
   };
 
   const handleDeliver = async (orderId: string) => {
-    const details = window.prompt('Enter account details / delivery info:');
+    const details = window.prompt('Enter account details / delivery info to submit:');
     if (details) {
       try {
         await updateDoc(doc(db, 'orders', orderId), {
-          status: 'in_progress',
+          status: 'delivered',
           deliveryDetails: details,
           updatedAt: new Date().toISOString()
         });
-        toast.success('Order marked as delivered!');
+        toast.success('Order submitted to buyer!');
       } catch (error) {
-        toast.error('Failed to update order');
+        toast.error('Failed to submit order');
       }
     }
   };
@@ -226,7 +226,7 @@ const Orders: React.FC = () => {
                   <div className="flex flex-wrap items-center gap-2">
                     <span className={`px-2 py-1 text-[10px] font-bold uppercase rounded ${
                       order.status === 'completed' ? 'bg-green-900/20 text-green-500' : 
-                      order.status === 'active' || order.status === 'in_progress' ? 'bg-blue-900/20 text-blue-500' : 
+                      order.status === 'active' || order.status === 'in_progress' || order.status === 'delivered' ? 'bg-blue-900/20 text-blue-500' : 
                       order.status === 'pending_payment' || order.status === 'pending_seller_approval' ? 'bg-orange-900/20 text-orange-500' : 'bg-red-900/20 text-red-500'
                     }`}>
                       {order.status}
@@ -244,15 +244,15 @@ const Orders: React.FC = () => {
                 </div>
 
                 <div className="flex flex-col sm:flex-row md:flex-col gap-3 justify-center min-w-[160px]">
-                  {activeTab === 'buying' && (order.status === 'active' || order.status === 'in_progress') && (
+                  {activeTab === 'buying' && (order.status === 'delivered' || order.status === 'active' || order.status === 'in_progress') && (
                     <button
                       onClick={() => handleConfirmDelivery(order)}
                       className="w-full bg-green-600 hover:bg-green-700 text-white py-2 rounded-xl text-sm font-bold transition-all"
                     >
-                      Confirm Delivery
+                      Verify & Complete Order
                     </button>
                   )}
-                  {activeTab === 'buying' && (order.status === 'active' || order.status === 'in_progress') && (
+                  {(order.status === 'active' || order.status === 'in_progress' || order.status === 'delivered') && (
                     <button
                       onClick={() => {
                         const reason = window.prompt('Enter dispute reason:');
@@ -268,7 +268,7 @@ const Orders: React.FC = () => {
                       onClick={() => handleDeliver(order.id)}
                       className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-xl text-sm font-bold transition-all"
                     >
-                      Deliver Details
+                      Submit Order
                     </button>
                   )}
                   <Link
@@ -278,9 +278,9 @@ const Orders: React.FC = () => {
                     <MessageSquare className="h-4 w-4 mr-2" />
                     Message
                   </Link>
-                  {(order.status === 'active' || order.status === 'in_progress' || order.status === 'completed') && order.deliveryDetails && activeTab === 'buying' && (
+                  {(order.status === 'active' || order.status === 'in_progress' || order.status === 'delivered' || order.status === 'completed') && order.deliveryDetails && activeTab === 'buying' && (
                     <div className="p-3 bg-zinc-800 rounded-xl border border-zinc-700">
-                      <div className="text-[10px] text-zinc-500 uppercase font-bold mb-1">Account Details:</div>
+                      <div className="text-[10px] text-zinc-500 uppercase font-bold mb-1">Delivery Details:</div>
                       <div className="text-xs text-white font-mono break-all">{order.deliveryDetails}</div>
                     </div>
                   )}
