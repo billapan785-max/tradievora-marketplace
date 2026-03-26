@@ -134,7 +134,7 @@ export interface Order {
   amount: number;
   escrowFee: number;
   featuredFee?: number;
-  status: 'pending_payment' | 'pending_seller_approval' | 'active' | 'in_progress' | 'completed' | 'cancelled' | 'disputed';
+  status: 'pending_payment' | 'pending_seller_approval' | 'active' | 'in_progress' | 'delivered' | 'completed' | 'cancelled' | 'disputed';
   orderType: 'fixed' | 'percentage_refund' | 'percentage_work' | 'security_deposit' | 'va_service';
   deliveryDetails?: string;
   disputeReason?: string;
