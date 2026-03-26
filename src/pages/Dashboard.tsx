@@ -23,7 +23,15 @@ const Dashboard: React.FC = () => {
     category: 'eBay Accounts',
     deliveryMethod: 'Instant',
     deliveryTime: '1 Hour',
-    isFeatured: false
+    isFeatured: false,
+    serviceType: 'fixed',
+    percentageRate: '',
+    minRefundAmount: '',
+    maxRefundAmount: '',
+    securityDepositAmount: '',
+    requireSellerApproval: false,
+    vaMonthlyPrice: '',
+    vaSalesPercentage: ''
   });
 
   useEffect(() => {
@@ -77,16 +85,34 @@ const Dashboard: React.FC = () => {
     }
 
     try {
-      await addDoc(collection(db, 'listings'), {
+      const listingData: any = {
         ...newListing,
-        price: parseFloat(newListing.price),
+        price: parseFloat(newListing.price) || 0,
         sellerId: profile.uid,
         sellerName: profile.displayName,
         sellerIsVerified: profile.isVerified || false,
         status: 'active',
         isFeatured: newListing.isFeatured,
         createdAt: new Date().toISOString()
-      });
+      };
+      
+      if (newListing.serviceType === 'percentage' || newListing.serviceType === 'refund_percentage') {
+        listingData.percentageRate = parseFloat(newListing.percentageRate) || 0;
+      }
+      if (newListing.serviceType === 'refund_percentage') {
+        listingData.minRefundAmount = parseFloat(newListing.minRefundAmount) || 0;
+        listingData.maxRefundAmount = parseFloat(newListing.maxRefundAmount) || 0;
+      }
+      if (newListing.serviceType === 'va_service') {
+        listingData.vaMonthlyPrice = parseFloat(newListing.vaMonthlyPrice) || 0;
+        listingData.vaSalesPercentage = parseFloat(newListing.vaSalesPercentage) || 0;
+      }
+      if (newListing.serviceType !== 'fixed') {
+        listingData.securityDepositAmount = parseFloat(newListing.securityDepositAmount) || 0;
+        listingData.requireSellerApproval = newListing.requireSellerApproval;
+      }
+
+      await addDoc(collection(db, 'listings'), listingData);
       toast.success('Listing created successfully!');
       setShowAddModal(false);
       setNewListing({
@@ -96,7 +122,15 @@ const Dashboard: React.FC = () => {
         category: 'eBay Accounts',
         deliveryMethod: 'Instant',
         deliveryTime: '1 Hour',
-        isFeatured: false
+        isFeatured: false,
+        serviceType: 'fixed',
+        percentageRate: '',
+        minRefundAmount: '',
+        maxRefundAmount: '',
+        securityDepositAmount: '',
+        requireSellerApproval: false,
+        vaMonthlyPrice: '',
+        vaSalesPercentage: ''
       });
     } catch (error) {
       toast.error('Failed to create listing');
@@ -204,7 +238,7 @@ const Dashboard: React.FC = () => {
                 <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Earnings</span>
               </div>
               <div className="text-4xl font-black text-white">
-                {mySales.filter(s => s.status === 'released').reduce((acc, s) => acc + s.amount, 0).toFixed(2)}
+                {mySales.filter(s => s.status === 'completed').reduce((acc, s) => acc + s.amount, 0).toFixed(2)}
               </div>
               <div className="text-zinc-500 text-sm mt-1">USDT Earned</div>
             </div>
@@ -332,9 +366,9 @@ const Dashboard: React.FC = () => {
                     <td className="px-6 py-4 text-white font-mono">{order.amount} USDT</td>
                     <td className="px-6 py-4">
                       <span className={`px-2 py-1 text-[10px] font-bold uppercase rounded ${
-                        order.status === 'released' ? 'bg-green-900/20 text-green-500' : 
-                        order.status === 'delivered' ? 'bg-blue-900/20 text-blue-500' : 
-                        order.status === 'pending' ? 'bg-orange-900/20 text-orange-500' : 'bg-red-900/20 text-red-500'
+                        order.status === 'completed' ? 'bg-green-900/20 text-green-500' : 
+                        order.status === 'active' || order.status === 'in_progress' ? 'bg-blue-900/20 text-blue-500' : 
+                        order.status === 'pending_payment' || order.status === 'pending_seller_approval' ? 'bg-orange-900/20 text-orange-500' : 'bg-red-900/20 text-red-500'
                       }`}>
                         {order.status}
                       </span>
@@ -410,6 +444,104 @@ const Dashboard: React.FC = () => {
                     <option>Other</option>
                   </select>
                 </div>
+                <div>
+                  <label className="block text-sm font-medium text-zinc-400 mb-2">Service Type</label>
+                  <select
+                    className="w-full bg-zinc-800 border border-zinc-700 rounded-xl py-3 px-4 text-white focus:outline-none focus:border-orange-500"
+                    value={newListing.serviceType}
+                    onChange={e => setNewListing({...newListing, serviceType: e.target.value})}
+                  >
+                    <option value="fixed">Fixed Price</option>
+                    <option value="percentage">Percentage Based</option>
+                    <option value="refund_percentage">Refund Percentage</option>
+                    <option value="va_service">Virtual Assistant Service</option>
+                  </select>
+                </div>
+                {newListing.serviceType !== 'fixed' && (
+                  <div>
+                    <label className="block text-sm font-medium text-zinc-400 mb-2">Security Deposit (USDT)</label>
+                    <input
+                      type="number"
+                      className="w-full bg-zinc-800 border border-zinc-700 rounded-xl py-3 px-4 text-white focus:outline-none focus:border-orange-500"
+                      placeholder="0.00"
+                      value={newListing.securityDepositAmount}
+                      onChange={e => setNewListing({...newListing, securityDepositAmount: e.target.value})}
+                    />
+                  </div>
+                )}
+                {(newListing.serviceType === 'percentage' || newListing.serviceType === 'refund_percentage') && (
+                  <div>
+                    <label className="block text-sm font-medium text-zinc-400 mb-2">Percentage Rate (%)</label>
+                    <input
+                      type="number"
+                      className="w-full bg-zinc-800 border border-zinc-700 rounded-xl py-3 px-4 text-white focus:outline-none focus:border-orange-500"
+                      placeholder="50"
+                      value={newListing.percentageRate}
+                      onChange={e => setNewListing({...newListing, percentageRate: e.target.value})}
+                    />
+                  </div>
+                )}
+                {newListing.serviceType === 'refund_percentage' && (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-zinc-400 mb-2">Min Refund Amount</label>
+                      <input
+                        type="number"
+                        className="w-full bg-zinc-800 border border-zinc-700 rounded-xl py-3 px-4 text-white focus:outline-none focus:border-orange-500"
+                        placeholder="0"
+                        value={newListing.minRefundAmount}
+                        onChange={e => setNewListing({...newListing, minRefundAmount: e.target.value})}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-zinc-400 mb-2">Max Refund Amount</label>
+                      <input
+                        type="number"
+                        className="w-full bg-zinc-800 border border-zinc-700 rounded-xl py-3 px-4 text-white focus:outline-none focus:border-orange-500"
+                        placeholder="1000"
+                        value={newListing.maxRefundAmount}
+                        onChange={e => setNewListing({...newListing, maxRefundAmount: e.target.value})}
+                      />
+                    </div>
+                  </>
+                )}
+                {newListing.serviceType === 'va_service' && (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-zinc-400 mb-2">Monthly Price (USDT)</label>
+                      <input
+                        type="number"
+                        className="w-full bg-zinc-800 border border-zinc-700 rounded-xl py-3 px-4 text-white focus:outline-none focus:border-orange-500"
+                        placeholder="200"
+                        value={newListing.vaMonthlyPrice}
+                        onChange={e => setNewListing({...newListing, vaMonthlyPrice: e.target.value})}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-zinc-400 mb-2">Sales Percentage (%)</label>
+                      <input
+                        type="number"
+                        className="w-full bg-zinc-800 border border-zinc-700 rounded-xl py-3 px-4 text-white focus:outline-none focus:border-orange-500"
+                        placeholder="10"
+                        value={newListing.vaSalesPercentage}
+                        onChange={e => setNewListing({...newListing, vaSalesPercentage: e.target.value})}
+                      />
+                    </div>
+                  </>
+                )}
+                <div className="md:col-span-2 flex items-center">
+                  <input
+                    type="checkbox"
+                    id="requireSellerApproval"
+                    className="w-5 h-5 rounded border-zinc-700 text-orange-600 focus:ring-orange-500 bg-zinc-800"
+                    checked={newListing.requireSellerApproval}
+                    onChange={e => setNewListing({...newListing, requireSellerApproval: e.target.checked})}
+                  />
+                  <label htmlFor="requireSellerApproval" className="ml-3 text-white font-bold cursor-pointer">
+                    Require Seller Approval
+                  </label>
+                </div>
+
                 <div>
                   <label className="block text-sm font-medium text-zinc-400 mb-2">Delivery Method</label>
                   <input

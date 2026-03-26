@@ -34,6 +34,7 @@ const Register: React.FC = () => {
         withdrawableBalance: 0,
         isSuspended: false,
         isVerified: false,
+        trustScore: 100,
         createdAt: new Date().toISOString(),
       };
       
@@ -77,7 +78,7 @@ const Register: React.FC = () => {
         </div>
 
         <form onSubmit={handleRegister} className="space-y-6">
-          <div className="grid grid-cols-2 gap-4 mb-6">
+          <div className="grid grid-cols-3 gap-4 mb-6">
             <button
               type="button"
               onClick={() => setRole('buyer')}
@@ -101,6 +102,18 @@ const Register: React.FC = () => {
             >
               <Briefcase className={`h-6 w-6 mb-2 ${role === 'seller' ? 'text-orange-500' : ''}`} />
               <span className="text-sm font-bold">Seller</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setRole('influencer')}
+              className={`flex flex-col items-center justify-center p-4 rounded-2xl border-2 transition-all ${
+                role === 'influencer'
+                  ? 'border-orange-600 bg-orange-600/10 text-white'
+                  : 'border-zinc-800 bg-zinc-800/50 text-zinc-500 hover:border-zinc-700'
+              }`}
+            >
+              <User className={`h-6 w-6 mb-2 ${role === 'influencer' ? 'text-orange-500' : ''}`} />
+              <span className="text-sm font-bold">Influencer</span>
             </button>
           </div>
 

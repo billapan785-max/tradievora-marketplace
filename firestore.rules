@@ -21,10 +21,10 @@ service cloud.firestore {
     // Fields: id, influencerId, influencerName, url, title, platform, description, views, bonusEarned, referralSales, status, bonusStatus, createdAt, updatedAt
     //
     // Collection: listings
-    // Fields: sellerId, title, description, price, category, deliveryMethod, deliveryTime, status, isFeatured, createdAt
+    // Fields: sellerId, title, description, price, category, deliveryMethod, deliveryTime, status, isFeatured, createdAt, serviceType, percentageRate, minRefundAmount, maxRefundAmount, securityDepositAmount, requireSellerApproval, vaMonthlyPrice, vaSalesPercentage
     //
     // Collection: orders
-    // Fields: buyerId, sellerId, listingId, amount, escrowFee, status, deliveryDetails, disputeReason, adminDecision, createdAt, updatedAt
+    // Fields: buyerId, sellerId, listingId, amount, escrowFee, status, orderType, deliveryDetails, disputeReason, adminDecision, createdAt, updatedAt
     //
     // Collection: deposits
     // Fields: userId, amount, txid, network, status, adminNote, createdAt
@@ -40,6 +40,15 @@ service cloud.firestore {
     //
     // Collection: settings
     // Fields: adminWalletTRC20, adminWalletERC20, marketplaceFeePercent, announcement, minWithdrawal, referralCommissionLevels, videoBonusStructure
+    //
+    // Collection: disputes
+    // Fields: orderId, buyerId, sellerId, reason, status, adminDecision, adminReason, createdAt, updatedAt
+    //
+    // Collection: evidence
+    // Fields: disputeId, userId, type, url, createdAt
+    //
+    // Collection: timeline
+    // Fields: orderId, type, description, userId, createdAt
     //
     // ===============================================================
 
@@ -85,7 +94,7 @@ service cloud.firestore {
       allow get: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
       allow list: if isAdmin();
       allow create: if isAuthenticated() && request.auth.uid == userId && 
-                      (request.resource.data.role == 'buyer' || (request.auth.token.email == "megadigital000004@gmail.com" && request.resource.data.role == 'admin')) &&
+                      (request.resource.data.role in ['buyer', 'seller', 'influencer'] || (request.auth.token.email == "megadigital000004@gmail.com" && request.resource.data.role == 'admin')) &&
                       request.resource.data.availableBalance == 0 &&
                       request.resource.data.isSuspended == false;
       allow update: if isAuthenticated() && (
@@ -200,6 +209,22 @@ service cloud.firestore {
     match /settings/{settingId} {
       allow read: if true;
       allow write: if isAdmin();
+    }
+
+    match /disputes/{disputeId} {
+      allow read: if isAuthenticated() && (isAdmin() || request.auth.uid == resource.data.buyerId || request.auth.uid == resource.data.sellerId);
+      allow create: if isAuthenticated() && !isSuspended() && (request.resource.data.buyerId == request.auth.uid || request.resource.data.sellerId == request.auth.uid);
+      allow update: if isAdmin();
+    }
+
+    match /evidence/{evidenceId} {
+      allow read: if isAuthenticated() && (isAdmin() || (exists(/databases/$(database)/documents/disputes/$(resource.data.disputeId)) && (get(/databases/$(database)/documents/disputes/$(resource.data.disputeId)).data.buyerId == request.auth.uid || get(/databases/$(database)/documents/disputes/$(resource.data.disputeId)).data.sellerId == request.auth.uid)));
+      allow create: if isAuthenticated() && !isSuspended() && (exists(/databases/$(database)/documents/disputes/$(request.resource.data.disputeId)) && (get(/databases/$(database)/documents/disputes/$(request.resource.data.disputeId)).data.buyerId == request.auth.uid || get(/databases/$(database)/documents/disputes/$(request.resource.data.disputeId)).data.sellerId == request.auth.uid));
+    }
+
+    match /timeline/{eventId} {
+      allow read: if isAuthenticated() && (isAdmin() || (exists(/databases/$(database)/documents/orders/$(resource.data.orderId)) && (get(/databases/$(database)/documents/orders/$(resource.data.orderId)).data.buyerId == request.auth.uid || get(/databases/$(database)/documents/orders/$(resource.data.orderId)).data.sellerId == request.auth.uid)));
+      allow create: if isAdmin();
     }
   }
 }

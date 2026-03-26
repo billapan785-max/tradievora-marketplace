@@ -380,7 +380,7 @@ const AdminPanel: React.FC = () => {
   if (loading || !profile) return <div className="text-center py-20 text-white">Loading Admin Control Center...</div>;
   if (profile.role !== 'admin') return <div className="text-center py-20 text-red-500 font-bold">Access Denied</div>;
 
-  const totalVolume = orders.filter(o => o.status === 'released').reduce((acc, o) => acc + o.amount, 0);
+  const totalVolume = orders.filter(o => o.status === 'completed').reduce((acc, o) => acc + o.amount, 0);
   const totalFees = totalVolume * (settings.marketplaceFeePercent / 100);
 
   return (
@@ -796,7 +796,9 @@ const AdminPanel: React.FC = () => {
                     <td className="px-6 py-4 text-white font-mono">{o.amount} USDT</td>
                     <td className="px-6 py-4">
                       <span className={`px-2 py-1 text-[10px] font-bold uppercase rounded ${
-                        o.status === 'disputed' ? 'bg-red-900/20 text-red-500' : 'bg-zinc-800 text-zinc-500'
+                        o.status === 'completed' ? 'bg-green-900/20 text-green-500' : 
+                        o.status === 'active' || o.status === 'in_progress' ? 'bg-blue-900/20 text-blue-500' : 
+                        o.status === 'pending_payment' || o.status === 'pending_seller_approval' ? 'bg-orange-900/20 text-orange-500' : 'bg-red-900/20 text-red-500'
                       }`}>
                         {o.status}
                       </span>

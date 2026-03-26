@@ -238,7 +238,7 @@ const Wallet: React.FC = () => {
       {/* Deposit Modal */}
       {showDepositModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl w-full max-w-lg p-8 shadow-2xl">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl w-full max-w-lg p-6 md:p-8 shadow-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-2xl font-bold text-white">Deposit USDT</h2>
               <button onClick={() => setShowDepositModal(false)} className="text-zinc-500 hover:text-white">&times;</button>
@@ -346,7 +346,7 @@ const Wallet: React.FC = () => {
       {/* Withdraw Modal */}
       {showWithdrawModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl w-full max-w-lg p-8 shadow-2xl">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl w-full max-w-lg p-6 md:p-8 shadow-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-2xl font-bold text-white">Withdraw USDT</h2>
               <button onClick={() => setShowWithdrawModal(false)} className="text-zinc-500 hover:text-white">&times;</button>

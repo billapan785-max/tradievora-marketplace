@@ -14,6 +14,7 @@
         "withdrawableBalance": { "type": "number", "description": "USDT that can be requested for withdrawal" },
         "isSuspended": { "type": "boolean" },
         "isVerified": { "type": "boolean" },
+        "trustScore": { "type": "number" },
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["uid", "email", "role"]
@@ -32,9 +33,17 @@
         "deliveryTime": { "type": "string" },
         "status": { "type": "string", "enum": ["active", "sold", "inactive"] },
         "isFeatured": { "type": "boolean" },
-        "createdAt": { "type": "string", "format": "date-time" }
+        "createdAt": { "type": "string", "format": "date-time" },
+        "serviceType": { "type": "string", "enum": ["fixed", "percentage", "refund_percentage", "va_service", "security_deposit"] },
+        "percentageRate": { "type": "number" },
+        "minRefundAmount": { "type": "number" },
+        "maxRefundAmount": { "type": "number" },
+        "securityDepositAmount": { "type": "number" },
+        "requireSellerApproval": { "type": "boolean" },
+        "vaMonthlyPrice": { "type": "number" },
+        "vaSalesPercentage": { "type": "number" }
       },
-      "required": ["sellerId", "title", "price", "category"]
+      "required": ["sellerId", "title", "price", "category", "serviceType"]
     },
     "Order": {
       "title": "Marketplace Order",
@@ -46,14 +55,15 @@
         "listingId": { "type": "string" },
         "amount": { "type": "number" },
         "escrowFee": { "type": "number" },
-        "status": { "type": "string", "enum": ["pending", "delivered", "confirmed", "disputed", "refunded", "released"] },
+        "status": { "type": "string", "enum": ["pending_payment", "pending_seller_approval", "active", "in_progress", "completed", "cancelled", "disputed"] },
+        "orderType": { "type": "string", "enum": ["fixed", "percentage_refund", "percentage_work", "security_deposit", "va_service"] },
         "deliveryDetails": { "type": "string", "description": "Sensitive account details delivered by seller" },
         "disputeReason": { "type": "string" },
         "adminDecision": { "type": "string" },
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["buyerId", "sellerId", "listingId", "amount", "status"]
+      "required": ["buyerId", "sellerId", "listingId", "amount", "status", "orderType"]
     },
     "Deposit": {
       "title": "USDT Deposit",
@@ -119,6 +129,49 @@
         "marketplaceFeePercent": { "type": "number" },
         "announcement": { "type": "string" }
       }
+    },
+    "Dispute": {
+      "title": "Order Dispute",
+      "description": "Dispute between buyer and seller.",
+      "type": "object",
+      "properties": {
+        "orderId": { "type": "string" },
+        "buyerId": { "type": "string" },
+        "sellerId": { "type": "string" },
+        "reason": { "type": "string", "enum": ["seller_not_delivered", "wrong_account", "refund_not_processed", "buyer_scam", "work_not_completed", "access_revoked", "other"] },
+        "status": { "type": "string", "enum": ["open", "resolved", "closed"] },
+        "adminDecision": { "type": "string", "enum": ["release", "refund", "split", "cancel"] },
+        "adminReason": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["orderId", "buyerId", "sellerId", "reason", "status"]
+    },
+    "Evidence": {
+      "title": "Dispute Evidence",
+      "description": "Evidence submitted for a dispute.",
+      "type": "object",
+      "properties": {
+        "disputeId": { "type": "string" },
+        "userId": { "type": "string" },
+        "type": { "type": "string", "enum": ["screenshot", "login_proof", "video_proof", "transaction_proof", "refund_proof"] },
+        "url": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["disputeId", "userId", "type", "url"]
+    },
+    "TimelineEvent": {
+      "title": "Order Timeline Event",
+      "description": "Event in the order timeline.",
+      "type": "object",
+      "properties": {
+        "orderId": { "type": "string" },
+        "type": { "type": "string" },
+        "description": { "type": "string" },
+        "userId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["orderId", "type", "description"]
     }
   },
   "firestore": {
@@ -129,6 +182,9 @@
     "/withdrawals/{withdrawalId}": { "schema": "Withdrawal", "description": "Withdrawal requests" },
     "/messages/{messageId}": { "schema": "Message", "description": "Chat messages" },
     "/reviews/{reviewId}": { "schema": "Review", "description": "Seller reviews" },
-    "/settings/platform": { "schema": "Settings", "description": "Global settings" }
+    "/settings/platform": { "schema": "Settings", "description": "Global settings" },
+    "/disputes/{disputeId}": { "schema": "Dispute", "description": "Order disputes" },
+    "/evidence/{evidenceId}": { "schema": "Evidence", "description": "Dispute evidence" },
+    "/timeline/{eventId}": { "schema": "TimelineEvent", "description": "Order timeline events" }
   }
 }

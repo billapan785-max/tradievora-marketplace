@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { collection, query, where, onSnapshot, orderBy } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
-import { Listing } from '../types';
+import { Listing, Review } from '../types';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Search, Filter, Tag, Clock, User, Star, BadgeCheck } from 'lucide-react';
 
@@ -10,6 +10,7 @@ const Marketplace: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [searchParams, setSearchParams] = useSearchParams();
   const [searchTerm, setSearchTerm] = useState('');
+  const [reviews, setReviews] = useState<Review[]>([]);
   
   const categoryFilter = searchParams.get('cat') || 'All';
 
@@ -18,6 +19,16 @@ const Marketplace: React.FC = () => {
     'TikTok Accounts', 'Facebook Accounts', 'Payment Gateways', 
     'Dropshipping Stores', 'Order Processing Services', 'Account Creation Services', 'Other'
   ];
+
+  useEffect(() => {
+    const unsubReviews = onSnapshot(collection(db, 'reviews'), (snapshot) => {
+      setReviews(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Review)));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'reviews');
+    });
+
+    return () => unsubReviews();
+  }, []);
 
   useEffect(() => {
     let q = query(collection(db, 'listings'), where('status', '==', 'active'), orderBy('createdAt', 'desc'));
@@ -41,6 +52,13 @@ const Marketplace: React.FC = () => {
 
     return () => unsubscribe();
   }, [categoryFilter]);
+
+  const getSellerRating = (sellerId: string) => {
+    const sellerReviews = reviews.filter(r => r.sellerId === sellerId);
+    if (sellerReviews.length === 0) return { rating: 0, count: 0 };
+    const avg = sellerReviews.reduce((acc, r) => acc + r.rating, 0) / sellerReviews.length;
+    return { rating: avg.toFixed(1), count: sellerReviews.length };
+  };
 
   const filteredListings = listings
     .filter(l => 
@@ -143,7 +161,7 @@ const Marketplace: React.FC = () => {
                       </div>
                       <div className="flex items-center text-orange-500 text-xs font-bold">
                         <Star className="h-3 w-3 fill-current mr-1" />
-                        4.9
+                        {Number(getSellerRating(listing.sellerId).rating) > 0 ? getSellerRating(listing.sellerId).rating : 'New'}
                       </div>
                     </div>
                     <h3 className="text-white font-bold text-lg mb-2 group-hover:text-orange-500 transition-colors">

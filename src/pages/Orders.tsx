@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { collection, query, where, onSnapshot, doc, updateDoc, increment, getDoc, setDoc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, doc, updateDoc, increment, getDoc, setDoc, addDoc } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { useAuth } from '../AuthContext';
-import { Order } from '../types';
+import { Order, Dispute } from '../types';
 import { Package, Clock, CheckCircle, AlertCircle, MessageSquare, Shield, ArrowRight } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -61,7 +61,7 @@ const Orders: React.FC = () => {
 
         // 1. Update Order Status
         await updateDoc(orderRef, { 
-          status: 'released',
+          status: 'completed',
           updatedAt: new Date().toISOString()
         });
 
@@ -125,12 +125,40 @@ const Orders: React.FC = () => {
     }
   };
 
+  const handleOpenDispute = async (order: Order, reason: Dispute['reason']) => {
+    try {
+      await addDoc(collection(db, 'disputes'), {
+        orderId: order.id,
+        buyerId: order.buyerId,
+        sellerId: order.sellerId,
+        reason: reason,
+        status: 'open',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+      await updateDoc(doc(db, 'orders', order.id), {
+        status: 'disputed',
+        updatedAt: new Date().toISOString(),
+      });
+      await addDoc(collection(db, 'timeline'), {
+        orderId: order.id,
+        type: 'dispute_opened',
+        description: `Dispute opened: ${reason}`,
+        userId: profile?.uid,
+        createdAt: new Date().toISOString(),
+      });
+      toast.success('Dispute opened successfully.');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, 'disputes');
+    }
+  };
+
   const handleDeliver = async (orderId: string) => {
     const details = window.prompt('Enter account details / delivery info:');
     if (details) {
       try {
         await updateDoc(doc(db, 'orders', orderId), {
-          status: 'delivered',
+          status: 'in_progress',
           deliveryDetails: details,
           updatedAt: new Date().toISOString()
         });
@@ -189,11 +217,17 @@ const Orders: React.FC = () => {
                 </div>
                 
                 <div className="flex-1 space-y-2">
+                  {(order.status === 'active' || order.status === 'in_progress') && (
+                    <div className="p-3 bg-orange-900/20 border border-orange-800/50 rounded-xl flex items-center text-orange-500 text-[10px] font-bold">
+                      <Shield className="h-3 w-3 mr-2" />
+                      Payment held in escrow. Released after completion.
+                    </div>
+                  )}
                   <div className="flex flex-wrap items-center gap-2">
                     <span className={`px-2 py-1 text-[10px] font-bold uppercase rounded ${
-                      order.status === 'released' ? 'bg-green-900/20 text-green-500' : 
-                      order.status === 'delivered' ? 'bg-blue-900/20 text-blue-500' : 
-                      order.status === 'pending' ? 'bg-orange-900/20 text-orange-500' : 'bg-red-900/20 text-red-500'
+                      order.status === 'completed' ? 'bg-green-900/20 text-green-500' : 
+                      order.status === 'active' || order.status === 'in_progress' ? 'bg-blue-900/20 text-blue-500' : 
+                      order.status === 'pending_payment' || order.status === 'pending_seller_approval' ? 'bg-orange-900/20 text-orange-500' : 'bg-red-900/20 text-red-500'
                     }`}>
                       {order.status}
                     </span>
@@ -210,7 +244,7 @@ const Orders: React.FC = () => {
                 </div>
 
                 <div className="flex flex-col sm:flex-row md:flex-col gap-3 justify-center min-w-[160px]">
-                  {activeTab === 'buying' && order.status === 'delivered' && (
+                  {activeTab === 'buying' && (order.status === 'active' || order.status === 'in_progress') && (
                     <button
                       onClick={() => handleConfirmDelivery(order)}
                       className="w-full bg-green-600 hover:bg-green-700 text-white py-2 rounded-xl text-sm font-bold transition-all"
@@ -218,7 +252,18 @@ const Orders: React.FC = () => {
                       Confirm Delivery
                     </button>
                   )}
-                  {activeTab === 'selling' && order.status === 'pending' && (
+                  {activeTab === 'buying' && (order.status === 'active' || order.status === 'in_progress') && (
+                    <button
+                      onClick={() => {
+                        const reason = window.prompt('Enter dispute reason:');
+                        if (reason) handleOpenDispute(order, 'other');
+                      }}
+                      className="w-full bg-red-600 hover:bg-red-700 text-white py-2 rounded-xl text-sm font-bold transition-all"
+                    >
+                      Open Dispute
+                    </button>
+                  )}
+                  {activeTab === 'selling' && (order.status === 'active' || order.status === 'in_progress') && (
                     <button
                       onClick={() => handleDeliver(order.id)}
                       className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-xl text-sm font-bold transition-all"
@@ -233,7 +278,7 @@ const Orders: React.FC = () => {
                     <MessageSquare className="h-4 w-4 mr-2" />
                     Message
                   </Link>
-                  {order.status === 'delivered' && order.deliveryDetails && activeTab === 'buying' && (
+                  {(order.status === 'active' || order.status === 'in_progress' || order.status === 'completed') && order.deliveryDetails && activeTab === 'buying' && (
                     <div className="p-3 bg-zinc-800 rounded-xl border border-zinc-700">
                       <div className="text-[10px] text-zinc-500 uppercase font-bold mb-1">Account Details:</div>
                       <div className="text-xs text-white font-mono break-all">{order.deliveryDetails}</div>

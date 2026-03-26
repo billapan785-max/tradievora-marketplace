@@ -10,8 +10,42 @@ export interface UserProfile {
   withdrawableBalance: number;
   isSuspended: boolean;
   isVerified: boolean;
+  trustScore: number; // 0-100
   referrerId?: string;
   referralChain?: string[]; // Up to 5 levels
+  createdAt: string;
+}
+
+// ... existing interfaces ...
+
+export interface Dispute {
+  id: string;
+  orderId: string;
+  buyerId: string;
+  sellerId: string;
+  reason: 'seller_not_delivered' | 'wrong_account' | 'refund_not_processed' | 'buyer_scam' | 'work_not_completed' | 'access_revoked' | 'other';
+  status: 'open' | 'resolved' | 'closed';
+  adminDecision?: 'release' | 'refund' | 'split' | 'cancel';
+  adminReason?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Evidence {
+  id: string;
+  disputeId: string;
+  userId: string;
+  type: 'screenshot' | 'login_proof' | 'video_proof' | 'transaction_proof' | 'refund_proof';
+  url: string;
+  createdAt: string;
+}
+
+export interface TimelineEvent {
+  id: string;
+  orderId: string;
+  type: string;
+  description: string;
+  userId?: string;
   createdAt: string;
 }
 
@@ -81,6 +115,14 @@ export interface Listing {
   status: 'active' | 'sold' | 'inactive';
   isFeatured: boolean;
   createdAt: string;
+  serviceType: 'fixed' | 'percentage' | 'refund_percentage' | 'va_service' | 'security_deposit';
+  percentageRate?: number;
+  minRefundAmount?: number;
+  maxRefundAmount?: number;
+  securityDepositAmount?: number;
+  requireSellerApproval?: boolean;
+  vaMonthlyPrice?: number;
+  vaSalesPercentage?: number;
 }
 
 export interface Order {
@@ -92,7 +134,8 @@ export interface Order {
   amount: number;
   escrowFee: number;
   featuredFee?: number;
-  status: 'pending' | 'delivered' | 'confirmed' | 'disputed' | 'refunded' | 'released';
+  status: 'pending_payment' | 'pending_seller_approval' | 'active' | 'in_progress' | 'completed' | 'cancelled' | 'disputed';
+  orderType: 'fixed' | 'percentage_refund' | 'percentage_work' | 'security_deposit' | 'va_service';
   deliveryDetails?: string;
   disputeReason?: string;
   adminDecision?: string;

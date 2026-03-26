@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { doc, getDoc, addDoc, collection, updateDoc, increment } from 'firebase/firestore';
+import { doc, getDoc, addDoc, collection, updateDoc, increment, query, where, onSnapshot } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
-import { Listing, UserProfile, Order } from '../types';
+import { Listing, UserProfile, Order, Review } from '../types';
 import { useAuth } from '../AuthContext';
 import { Shield, Clock, User, Star, CheckCircle, AlertCircle, ShoppingCart, BadgeCheck } from 'lucide-react';
 import { toast } from 'sonner';
@@ -16,6 +16,7 @@ const ListingDetail: React.FC = () => {
   const [seller, setSeller] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [buying, setBuying] = useState(false);
+  const [reviews, setReviews] = useState<Review[]>([]);
 
   useEffect(() => {
     const fetchListing = async () => {
@@ -25,13 +26,22 @@ const ListingDetail: React.FC = () => {
         const data = docSnap.data() as Listing;
         setListing({ id: docSnap.id, ...data });
         
-        // We don't fetch the full seller profile here to avoid permission errors
-        // and protect PII. We use denormalized data from the listing instead.
+        // Fetch reviews for the seller
+        const qReviews = query(collection(db, 'reviews'), where('sellerId', '==', data.sellerId));
+        onSnapshot(qReviews, (snapshot) => {
+          setReviews(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Review)));
+        }, (error) => {
+          handleFirestoreError(error, OperationType.LIST, 'reviews');
+        });
       }
       setLoading(false);
     };
     fetchListing();
   }, [id]);
+
+  const averageRating = reviews.length > 0
+    ? (reviews.reduce((acc, review) => acc + review.rating, 0) / reviews.length).toFixed(1)
+    : '0.0';
 
   const handleBuy = async () => {
     if (!user || !profile) {
@@ -41,7 +51,22 @@ const ListingDetail: React.FC = () => {
 
     if (!listing) return;
 
-    if (profile.availableBalance < listing.price) {
+    let orderAmount = listing.price;
+    let orderType: Order['orderType'] = 'fixed';
+
+    if (listing.serviceType === 'percentage' || listing.serviceType === 'refund_percentage') {
+      // For percentage based, the buyer pays the deposit
+      orderAmount = (listing.price * (listing.percentageRate || 0)) / 100;
+      orderType = listing.serviceType === 'refund_percentage' ? 'percentage_refund' : 'percentage_work';
+    } else if (listing.serviceType === 'security_deposit') {
+      orderAmount = listing.securityDepositAmount || 0;
+      orderType = 'security_deposit';
+    } else if (listing.serviceType === 'va_service') {
+      orderAmount = listing.vaMonthlyPrice || 0;
+      orderType = 'va_service';
+    }
+
+    if (profile.availableBalance < orderAmount) {
       toast.error('Insufficient balance. Please deposit USDT.');
       navigate('/wallet');
       return;
@@ -60,10 +85,11 @@ const ListingDetail: React.FC = () => {
         sellerId: listing.sellerId,
         listingId: listing.id,
         listingTitle: listing.title,
-        amount: listing.price,
-        escrowFee: listing.price * 0.05, // 5% fee
-        featuredFee: listing.isFeatured ? listing.price * 0.10 : 0, // 10% extra fee if featured
-        status: 'pending',
+        amount: orderAmount,
+        escrowFee: orderAmount * 0.05, // 5% fee
+        featuredFee: listing.isFeatured ? orderAmount * 0.10 : 0, // 10% extra fee if featured
+        status: listing.requireSellerApproval ? 'pending_seller_approval' : 'pending_payment',
+        orderType: orderType,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
@@ -73,11 +99,11 @@ const ListingDetail: React.FC = () => {
       // 2. Update Buyer Balances
       const buyerRef = doc(db, 'users', profile.uid);
       await updateDoc(buyerRef, {
-        availableBalance: increment(-listing.price),
-        escrowBalance: increment(listing.price)
+        availableBalance: increment(-orderAmount),
+        escrowBalance: increment(orderAmount)
       });
 
-      toast.success('Order placed successfully! Funds held in escrow.');
+      toast.success('Order placed successfully! Payment is held in escrow and will be released after order completion.');
       navigate(`/orders/${orderRef.id}`);
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, 'orders/users');
@@ -123,6 +149,30 @@ const ListingDetail: React.FC = () => {
               <div className="text-zinc-500 text-xs mb-1 uppercase font-bold tracking-tighter">Price</div>
               <div className="text-2xl font-bold text-white">{listing.price} <span className="text-sm font-normal text-zinc-500">USDT</span></div>
             </div>
+            {listing.serviceType === 'percentage' && (
+              <div className="bg-zinc-800/50 p-4 rounded-2xl border border-zinc-800">
+                <div className="text-zinc-500 text-xs mb-1 uppercase font-bold tracking-tighter">Percentage</div>
+                <div className="text-2xl font-bold text-white">{listing.percentageRate}%</div>
+              </div>
+            )}
+            {listing.serviceType === 'refund_percentage' && (
+              <div className="bg-zinc-800/50 p-4 rounded-2xl border border-zinc-800">
+                <div className="text-zinc-500 text-xs mb-1 uppercase font-bold tracking-tighter">Refund Range</div>
+                <div className="text-lg font-bold text-white">{listing.minRefundAmount} - {listing.maxRefundAmount} USDT</div>
+              </div>
+            )}
+            {listing.serviceType === 'security_deposit' && (
+              <div className="bg-zinc-800/50 p-4 rounded-2xl border border-zinc-800">
+                <div className="text-zinc-500 text-xs mb-1 uppercase font-bold tracking-tighter">Deposit</div>
+                <div className="text-2xl font-bold text-white">{listing.securityDepositAmount} USDT</div>
+              </div>
+            )}
+            {listing.serviceType === 'va_service' && (
+              <div className="bg-zinc-800/50 p-4 rounded-2xl border border-zinc-800">
+                <div className="text-zinc-500 text-xs mb-1 uppercase font-bold tracking-tighter">Monthly</div>
+                <div className="text-2xl font-bold text-white">{listing.vaMonthlyPrice} USDT</div>
+              </div>
+            )}
             <div className="bg-zinc-800/50 p-4 rounded-2xl border border-zinc-800">
               <div className="text-zinc-500 text-xs mb-1 uppercase font-bold tracking-tighter">Delivery</div>
               <div className="text-lg font-bold text-white flex items-center">
@@ -130,6 +180,7 @@ const ListingDetail: React.FC = () => {
                 {listing.deliveryTime}
               </div>
             </div>
+
             <div className="bg-zinc-800/50 p-4 rounded-2xl border border-zinc-800">
               <div className="text-zinc-500 text-xs mb-1 uppercase font-bold tracking-tighter">Method</div>
               <div className="text-lg font-bold text-white">{listing.deliveryMethod}</div>
@@ -144,13 +195,28 @@ const ListingDetail: React.FC = () => {
           </div>
         </div>
 
-        {/* Reviews Section Placeholder */}
+        {/* Reviews Section */}
         <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-8">
           <h3 className="text-xl font-bold text-white mb-6">Recent Reviews</h3>
           <div className="space-y-6">
-            <div className="text-center py-10 text-zinc-600">
-              No reviews yet for this listing.
-            </div>
+            {reviews.length > 0 ? (
+              reviews.map(review => (
+                <div key={review.id} className="border-b border-zinc-800 pb-6 last:border-0">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center text-orange-500 text-xs font-bold">
+                      <Star className="h-3 w-3 fill-current mr-1" />
+                      {review.rating.toFixed(1)}
+                    </div>
+                    <div className="text-zinc-500 text-xs">{new Date(review.createdAt).toLocaleDateString()}</div>
+                  </div>
+                  <p className="text-zinc-400 text-sm">{review.comment}</p>
+                </div>
+              ))
+            ) : (
+              <div className="text-center py-10 text-zinc-600">
+                No reviews yet for this seller.
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -172,7 +238,7 @@ const ListingDetail: React.FC = () => {
               <p className="text-zinc-500 text-xs">Joined Recently</p>
               <div className="flex items-center mt-1 text-orange-500 text-xs font-bold">
                 <Star className="h-3 w-3 fill-current mr-1" />
-                4.9 (124 Orders)
+                {averageRating} ({reviews.length} Reviews)
               </div>
             </div>
           </div>
