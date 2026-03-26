@@ -797,7 +797,7 @@ const AdminPanel: React.FC = () => {
                     <td className="px-6 py-4">
                       <span className={`px-2 py-1 text-[10px] font-bold uppercase rounded ${
                         o.status === 'completed' ? 'bg-green-900/20 text-green-500' : 
-                        o.status === 'active' || o.status === 'in_progress' ? 'bg-blue-900/20 text-blue-500' : 
+                        o.status === 'active' || o.status === 'in_progress' || o.status === 'delivered' ? 'bg-blue-900/20 text-blue-500' : 
                         o.status === 'pending_payment' || o.status === 'pending_seller_approval' ? 'bg-orange-900/20 text-orange-500' : 'bg-red-900/20 text-red-500'
                       }`}>
                         {o.status}
