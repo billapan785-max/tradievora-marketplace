@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { collection, query, onSnapshot, doc, updateDoc, increment, getDoc, setDoc, where, addDoc, orderBy, getDocs } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { useAuth } from '../AuthContext';
-import { Deposit, Withdrawal, UserProfile, PlatformSettings, Order, Listing, InfluencerProfile, VideoPromotion, Commission, SupportTicket, SupportMessage } from '../types';
-import { Shield, Users, CreditCard, Settings, Check, X, AlertCircle, TrendingUp, Video, DollarSign, Award, ExternalLink, MessageSquare, Send, User, BadgeCheck } from 'lucide-react';
+import { Deposit, Withdrawal, UserProfile, PlatformSettings, Order, Listing, InfluencerProfile, VideoPromotion, Commission, SupportTicket, SupportMessage, Dispute, Evidence, Message } from '../types';
+import { Shield, Users, CreditCard, Settings, Check, X, AlertCircle, TrendingUp, Video, DollarSign, Award, ExternalLink, MessageSquare, Send, User, BadgeCheck, Eye, Info, ArrowRight } from 'lucide-react';
 import { toast } from 'sonner';
 
 const AdminPanel: React.FC = () => {
@@ -42,6 +43,10 @@ const AdminPanel: React.FC = () => {
   });
   const [listings, setListings] = useState<Listing[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [dispute, setDispute] = useState<Dispute | null>(null);
+  const [evidence, setEvidence] = useState<Evidence[]>([]);
+  const [orderMessages, setOrderMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'stats' | 'deposits' | 'withdrawals' | 'users' | 'listings' | 'orders' | 'influencers' | 'videos' | 'settings' | 'support'>('stats');
 
@@ -129,6 +134,46 @@ const AdminPanel: React.FC = () => {
 
     return () => unsubscribe();
   }, [selectedTicket]);
+
+  useEffect(() => {
+    if (!selectedOrder) {
+      setDispute(null);
+      setEvidence([]);
+      setOrderMessages([]);
+      return;
+    }
+
+    // Fetch Dispute
+    const qDispute = query(collection(db, 'disputes'), where('orderId', '==', selectedOrder.id));
+    const unsubDispute = onSnapshot(qDispute, (snapshot) => {
+      if (!snapshot.empty) {
+        const disputeData = { id: snapshot.docs[0].id, ...snapshot.docs[0].data() } as Dispute;
+        setDispute(disputeData);
+
+        // Fetch Evidence for this dispute
+        const qEvidence = query(collection(db, 'evidence'), where('disputeId', '==', disputeData.id));
+        const unsubEvidence = onSnapshot(qEvidence, (snapshot) => {
+          setEvidence(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Evidence)));
+        });
+        return () => unsubEvidence();
+      }
+    });
+
+    // Fetch Chat Logs
+    const qMessages = query(
+      collection(db, 'messages'),
+      where('orderId', '==', selectedOrder.id),
+      orderBy('createdAt', 'asc')
+    );
+    const unsubMessages = onSnapshot(qMessages, (snapshot) => {
+      setOrderMessages(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Message)));
+    });
+
+    return () => {
+      unsubDispute();
+      unsubMessages();
+    };
+  }, [selectedOrder]);
 
   const handleSendSupportMessage = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -308,16 +353,27 @@ const AdminPanel: React.FC = () => {
       if (!orderSnap.exists()) return;
       const order = orderSnap.data() as Order;
 
+      // Find associated dispute
+      const qDispute = query(collection(db, 'disputes'), where('orderId', '==', orderId));
+      const disputeSnap = await getDocs(qDispute);
+
       if (decision === 'refund') {
         const buyerRef = doc(db, 'users', order.buyerId);
-        await updateDoc(buyerRef, { availableBalance: increment(order.amount) });
-        await updateDoc(orderRef, { status: 'refunded', adminDecision: 'Refunded by Admin' });
+        await updateDoc(buyerRef, { 
+          availableBalance: increment(order.amount),
+          escrowBalance: increment(-order.amount)
+        });
+        await updateDoc(orderRef, { status: 'cancelled', adminDecision: 'Refunded by Admin' });
       } else {
         const sellerRef = doc(db, 'users', order.sellerId);
         const buyerRef = doc(db, 'users', order.buyerId);
         const totalFees = order.escrowFee + (order.featuredFee || 0);
-        await updateDoc(sellerRef, { withdrawableBalance: increment(order.amount - totalFees) });
-        await updateDoc(orderRef, { status: 'released', adminDecision: 'Released by Admin' });
+        
+        await updateDoc(buyerRef, {
+          escrowBalance: increment(-order.amount)
+        });
+        await updateDoc(sellerRef, { availableBalance: increment(order.amount - totalFees) });
+        await updateDoc(orderRef, { status: 'completed', adminDecision: 'Released by Admin' });
         
         // Distribute Commissions
         const buyerSnap = await getDoc(buyerRef);
@@ -362,7 +418,26 @@ const AdminPanel: React.FC = () => {
           }
         }
       }
+
+      // Update dispute status if it exists
+      if (!disputeSnap.empty) {
+        await updateDoc(doc(db, 'disputes', disputeSnap.docs[0].id), {
+          status: 'resolved',
+          adminDecision: decision,
+          updatedAt: new Date().toISOString()
+        });
+      }
+
+      // Add timeline event
+      await addDoc(collection(db, 'timeline'), {
+        orderId: order.id,
+        type: 'order_resolved',
+        description: `Order resolved by Admin: ${decision === 'refund' ? 'Refunded to Buyer' : 'Released to Seller'}`,
+        createdAt: new Date().toISOString()
+      });
+
       toast.success(`Order resolved: ${decision}`);
+      setSelectedOrder(null); // Close details view if open
     } catch (error) {
       toast.error('Failed to resolve order');
     }
@@ -771,7 +846,7 @@ const AdminPanel: React.FC = () => {
       )}
 
       {/* Orders Tab */}
-      {activeTab === 'orders' && (
+      {activeTab === 'orders' && !selectedOrder && (
         <div className="bg-zinc-900 border border-zinc-800 rounded-3xl overflow-hidden">
           <div className="p-6 border-b border-zinc-800">
             <h2 className="text-xl font-bold text-white">All Orders</h2>
@@ -850,11 +925,189 @@ const AdminPanel: React.FC = () => {
                           </button>
                         </>
                       )}
+                      <button 
+                        onClick={() => setSelectedOrder(o)}
+                        className="p-2 text-zinc-400 hover:text-white transition-colors"
+                        title="View Details"
+                      >
+                        <Eye className="h-4 w-4" />
+                      </button>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* Order Details View */}
+      {activeTab === 'orders' && selectedOrder && (
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <button 
+              onClick={() => setSelectedOrder(null)}
+              className="flex items-center text-zinc-400 hover:text-white transition-colors"
+            >
+              <ArrowRight className="h-4 w-4 mr-2 rotate-180" />
+              Back to Orders
+            </button>
+            <div className="flex items-center space-x-3">
+              <span className={`px-3 py-1 text-xs font-bold uppercase rounded-full ${
+                selectedOrder.status === 'completed' ? 'bg-green-900/20 text-green-500' : 
+                selectedOrder.status === 'disputed' ? 'bg-red-900/20 text-red-500' : 'bg-blue-900/20 text-blue-500'
+              }`}>
+                {selectedOrder.status}
+              </span>
+              <span className="text-zinc-500 font-mono text-sm">#{selectedOrder.id}</span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Left Column: Order Info */}
+            <div className="lg:col-span-2 space-y-6">
+              <div className="bg-zinc-900 border border-zinc-800 p-6 rounded-3xl">
+                <h3 className="text-lg font-bold text-white mb-4">Order Information</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <div className="text-xs text-zinc-500 uppercase font-bold mb-1">Listing</div>
+                    <div className="text-white font-bold">{selectedOrder.listingTitle}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-zinc-500 uppercase font-bold mb-1">Amount</div>
+                    <div className="text-white font-mono">{selectedOrder.amount} USDT</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-zinc-500 uppercase font-bold mb-1">Buyer ID</div>
+                    <div className="text-zinc-400 text-xs font-mono">{selectedOrder.buyerId}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-zinc-500 uppercase font-bold mb-1">Seller ID</div>
+                    <div className="text-zinc-400 text-xs font-mono">{selectedOrder.sellerId}</div>
+                  </div>
+                </div>
+                {selectedOrder.deliveryDetails && (
+                  <div className="mt-6 p-4 bg-zinc-800 rounded-2xl border border-zinc-700">
+                    <div className="text-xs text-zinc-500 uppercase font-bold mb-2">Seller's Delivery Details</div>
+                    <div className="text-sm text-white font-mono whitespace-pre-wrap">{selectedOrder.deliveryDetails}</div>
+                  </div>
+                )}
+              </div>
+
+              {/* Chat Logs */}
+              <div className="bg-zinc-900 border border-zinc-800 p-6 rounded-3xl">
+                <h3 className="text-lg font-bold text-white mb-4 flex items-center">
+                  <MessageSquare className="h-5 w-5 mr-2 text-orange-500" />
+                  Order Chat Logs
+                </h3>
+                <div className="space-y-4 max-h-[400px] overflow-y-auto p-4 bg-zinc-950 rounded-2xl border border-zinc-800">
+                  {orderMessages.length > 0 ? (
+                    orderMessages.map((m) => (
+                      <div key={m.id} className={`flex flex-col ${m.senderId === selectedOrder.buyerId ? 'items-start' : 'items-end'}`}>
+                        <div className={`max-w-[80%] p-3 rounded-2xl text-sm ${
+                          m.senderId === selectedOrder.buyerId ? 'bg-zinc-800 text-white' : 'bg-orange-600 text-white'
+                        }`}>
+                          {m.text}
+                        </div>
+                        <div className="text-[10px] text-zinc-500 mt-1">
+                          {m.senderId === selectedOrder.buyerId ? 'Buyer' : 'Seller'} • {new Date(m.createdAt).toLocaleTimeString()}
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-center py-10 text-zinc-600 italic">No messages found for this order.</div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Right Column: Dispute & Actions */}
+            <div className="space-y-6">
+              {dispute && (
+                <div className="bg-red-900/10 border border-red-900/20 p-6 rounded-3xl">
+                  <h3 className="text-lg font-bold text-red-500 mb-4 flex items-center">
+                    <AlertCircle className="h-5 w-5 mr-2" />
+                    Dispute Details
+                  </h3>
+                  <div className="space-y-4">
+                    <div>
+                      <div className="text-xs text-zinc-500 uppercase font-bold mb-1">Reason</div>
+                      <div className="text-white font-bold capitalize">{dispute.reason.replace(/_/g, ' ')}</div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-zinc-500 uppercase font-bold mb-1">Status</div>
+                      <div className={`text-xs font-bold uppercase ${dispute.status === 'open' ? 'text-red-500' : 'text-green-500'}`}>
+                        {dispute.status}
+                      </div>
+                    </div>
+                    
+                    {evidence.length > 0 && (
+                      <div>
+                        <div className="text-xs text-zinc-500 uppercase font-bold mb-2">Evidence Submitted</div>
+                        <div className="grid grid-cols-2 gap-2">
+                          {evidence.map((ev) => (
+                            <a 
+                              key={ev.id} 
+                              href={ev.url} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="p-2 bg-zinc-800 border border-zinc-700 rounded-xl text-[10px] text-zinc-400 hover:text-white hover:border-zinc-600 transition-all flex flex-col items-center text-center"
+                            >
+                              <ExternalLink className="h-4 w-4 mb-1" />
+                              {ev.type.replace(/_/g, ' ')}
+                              <div className="mt-1 opacity-50">{ev.userId === selectedOrder.buyerId ? 'Buyer' : 'Seller'}</div>
+                            </a>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {selectedOrder.status === 'disputed' && (
+                <div className="bg-zinc-900 border border-zinc-800 p-6 rounded-3xl">
+                  <h3 className="text-lg font-bold text-white mb-4">Final Decision</h3>
+                  <p className="text-xs text-zinc-500 mb-6">As an administrator, your decision is final. Choose carefully based on the evidence and chat logs provided.</p>
+                  <div className="grid grid-cols-1 gap-3">
+                    <button 
+                      onClick={() => handleResolveOrder(selectedOrder.id, 'release')}
+                      className="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-2xl font-bold transition-all flex items-center justify-center"
+                    >
+                      <Check className="h-5 w-5 mr-2" />
+                      Release to Seller
+                    </button>
+                    <button 
+                      onClick={() => handleResolveOrder(selectedOrder.id, 'refund')}
+                      className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-2xl font-bold transition-all flex items-center justify-center"
+                    >
+                      <Check className="h-5 w-5 mr-2" />
+                      Refund to Buyer
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <div className="bg-zinc-900 border border-zinc-800 p-6 rounded-3xl">
+                <h3 className="text-lg font-bold text-white mb-4">Quick Actions</h3>
+                <div className="space-y-3">
+                  <Link 
+                    to={`/admin?tab=users&uid=${selectedOrder.buyerId}`}
+                    className="w-full p-3 bg-zinc-800 hover:bg-zinc-700 text-white rounded-2xl text-sm font-bold flex items-center transition-all"
+                  >
+                    <User className="h-4 w-4 mr-2" />
+                    View Buyer Profile
+                  </Link>
+                  <Link 
+                    to={`/admin?tab=users&uid=${selectedOrder.sellerId}`}
+                    className="w-full p-3 bg-zinc-800 hover:bg-zinc-700 text-white rounded-2xl text-sm font-bold flex items-center transition-all"
+                  >
+                    <User className="h-4 w-4 mr-2" />
+                    View Seller Profile
+                  </Link>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}
