@@ -88,7 +88,7 @@ const ListingDetail: React.FC = () => {
         amount: orderAmount,
         escrowFee: orderAmount * 0.05, // 5% fee
         featuredFee: listing.isFeatured ? orderAmount * 0.10 : 0, // 10% extra fee if featured
-        status: listing.requireSellerApproval ? 'pending_seller_approval' : 'pending_payment',
+        status: listing.requireSellerApproval ? 'pending_seller_approval' : 'active',
         orderType: orderType,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
