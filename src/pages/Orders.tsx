@@ -223,6 +223,18 @@ const Orders: React.FC = () => {
                       Payment held in escrow. Released after completion.
                     </div>
                   )}
+                  {order.status === 'pending_payment' && (
+                    <div className="p-3 bg-orange-900/20 border border-orange-800/50 rounded-xl flex items-center text-orange-500 text-[10px] font-bold">
+                      <Clock className="h-3 w-3 mr-2" />
+                      Waiting for administrator to verify payment.
+                    </div>
+                  )}
+                  {order.status === 'pending_seller_approval' && (
+                    <div className="p-3 bg-orange-900/20 border border-orange-800/50 rounded-xl flex items-center text-orange-500 text-[10px] font-bold">
+                      <Clock className="h-3 w-3 mr-2" />
+                      Waiting for seller to accept the order.
+                    </div>
+                  )}
                   <div className="flex flex-wrap items-center gap-2">
                     <span className={`px-2 py-1 text-[10px] font-bold uppercase rounded ${
                       order.status === 'completed' ? 'bg-green-900/20 text-green-500' : 
@@ -262,6 +274,42 @@ const Orders: React.FC = () => {
                     >
                       Open Dispute
                     </button>
+                  )}
+                  {activeTab === 'selling' && order.status === 'pending_seller_approval' && (
+                    <div className="flex gap-2 w-full">
+                      <button
+                        onClick={async () => {
+                          try {
+                            await updateDoc(doc(db, 'orders', order.id), { status: 'active', updatedAt: new Date().toISOString() });
+                            toast.success('Order accepted!');
+                          } catch (error) {
+                            toast.error('Failed to accept order');
+                          }
+                        }}
+                        className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-xl text-sm font-bold transition-all"
+                      >
+                        Accept
+                      </button>
+                      <button
+                        onClick={async () => {
+                          try {
+                            await updateDoc(doc(db, 'orders', order.id), { status: 'cancelled', updatedAt: new Date().toISOString() });
+                            // Refund buyer
+                            const buyerRef = doc(db, 'users', order.buyerId);
+                            await updateDoc(buyerRef, {
+                              availableBalance: increment(order.amount),
+                              escrowBalance: increment(-order.amount)
+                            });
+                            toast.success('Order rejected and buyer refunded');
+                          } catch (error) {
+                            toast.error('Failed to reject order');
+                          }
+                        }}
+                        className="flex-1 bg-red-600 hover:bg-red-700 text-white py-2 rounded-xl text-sm font-bold transition-all"
+                      >
+                        Reject
+                      </button>
+                    </div>
                   )}
                   {activeTab === 'selling' && (order.status === 'active' || order.status === 'in_progress') && (
                     <button
