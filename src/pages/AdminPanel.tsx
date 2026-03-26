@@ -49,6 +49,19 @@ const AdminPanel: React.FC = () => {
   const [orderMessages, setOrderMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'stats' | 'deposits' | 'withdrawals' | 'users' | 'listings' | 'orders' | 'influencers' | 'videos' | 'settings' | 'support'>('stats');
+  const [showDeleteListingModal, setShowDeleteListingModal] = useState<string | null>(null);
+  const [showRejectVideoModal, setShowRejectVideoModal] = useState<VideoPromotion | null>(null);
+  const [showApproveDepositModal, setShowApproveDepositModal] = useState<Deposit | null>(null);
+  const [showRejectDepositModal, setShowRejectDepositModal] = useState<string | null>(null);
+  const [showCompleteWithdrawalModal, setShowCompleteWithdrawalModal] = useState<Withdrawal | null>(null);
+  const [showRejectWithdrawalModal, setShowRejectWithdrawalModal] = useState<string | null>(null);
+  const [showResolveOrderModal, setShowResolveOrderModal] = useState<{ orderId: string, decision: 'refund' | 'release' } | null>(null);
+  const [searchTermUsers, setSearchTermUsers] = useState('');
+  const [searchTermDeposits, setSearchTermDeposits] = useState('');
+  const [searchTermWithdrawals, setSearchTermWithdrawals] = useState('');
+  const [searchTermOrders, setSearchTermOrders] = useState('');
+  const [searchTermListings, setSearchTermListings] = useState('');
+  const [modalInput, setModalInput] = useState('');
 
   useEffect(() => {
     if (profile?.role !== 'admin') return;
@@ -223,10 +236,7 @@ const AdminPanel: React.FC = () => {
     }
   };
 
-  const handleRejectVideo = async (video: VideoPromotion) => {
-    const reason = window.prompt('Enter rejection reason:');
-    if (!reason) return;
-
+  const handleRejectVideo = async (video: VideoPromotion, reason: string) => {
     try {
       await updateDoc(doc(db, 'videos', video.id), { 
         status: 'rejected',
@@ -244,6 +254,8 @@ const AdminPanel: React.FC = () => {
       });
 
       toast.success('Video rejected');
+      setShowRejectVideoModal(null);
+      setModalInput('');
     } catch (error) {
       toast.error('Failed to reject video');
     }
@@ -336,13 +348,12 @@ const AdminPanel: React.FC = () => {
   };
 
   const handleDeleteListing = async (id: string) => {
-    if (window.confirm('Admin: Are you sure you want to delete this listing?')) {
-      try {
-        await updateDoc(doc(db, 'listings', id), { status: 'inactive' });
-        toast.success('Listing deactivated by admin');
-      } catch (error) {
-        toast.error('Failed to deactivate listing');
-      }
+    try {
+      await updateDoc(doc(db, 'listings', id), { status: 'inactive' });
+      toast.success('Listing deactivated by admin');
+      setShowDeleteListingModal(null);
+    } catch (error) {
+      toast.error('Failed to deactivate listing');
     }
   };
 
@@ -372,7 +383,7 @@ const AdminPanel: React.FC = () => {
         await updateDoc(buyerRef, {
           escrowBalance: increment(-order.amount)
         });
-        await updateDoc(sellerRef, { availableBalance: increment(order.amount - totalFees) });
+        await updateDoc(sellerRef, { withdrawableBalance: increment(order.amount - totalFees) });
         await updateDoc(orderRef, { status: 'completed', adminDecision: 'Released by Admin' });
         
         // Distribute Commissions
@@ -585,8 +596,17 @@ const AdminPanel: React.FC = () => {
       {/* Deposits Tab */}
       {activeTab === 'deposits' && (
         <div className="bg-zinc-900 border border-zinc-800 rounded-3xl overflow-hidden">
-          <div className="p-6 border-b border-zinc-800">
+          <div className="p-6 border-b border-zinc-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
             <h2 className="text-xl font-bold text-white">Pending Deposits</h2>
+            <div className="relative w-full md:w-64">
+              <input
+                type="text"
+                placeholder="Search deposits..."
+                className="w-full bg-zinc-800 border border-zinc-700 rounded-xl py-2 px-4 text-sm text-white focus:outline-none focus:border-orange-500"
+                value={searchTermDeposits}
+                onChange={(e) => setSearchTermDeposits(e.target.value)}
+              />
+            </div>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left">
@@ -600,7 +620,14 @@ const AdminPanel: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-800">
-                {deposits.filter(d => d.status === 'pending').map(d => (
+                {deposits
+                  .filter(d => d.status === 'pending')
+                  .filter(d => 
+                    d.userEmail.toLowerCase().includes(searchTermDeposits.toLowerCase()) ||
+                    d.txid.toLowerCase().includes(searchTermDeposits.toLowerCase()) ||
+                    d.userId.toLowerCase().includes(searchTermDeposits.toLowerCase())
+                  )
+                  .map(d => (
                   <tr key={d.id} className="hover:bg-zinc-800/30 transition-colors">
                     <td className="px-6 py-4">
                       <div className="text-white font-bold">{d.userEmail}</div>
@@ -614,10 +641,10 @@ const AdminPanel: React.FC = () => {
                       <span className="px-2 py-1 bg-orange-900/20 text-orange-500 text-[10px] font-bold uppercase rounded">Pending</span>
                     </td>
                     <td className="px-6 py-4 text-right space-x-2">
-                      <button onClick={() => handleApproveDeposit(d)} className="p-2 bg-green-600/20 text-green-500 hover:bg-green-600 hover:text-white rounded-lg transition-all">
+                      <button onClick={() => setShowApproveDepositModal(d)} className="p-2 bg-green-600/20 text-green-500 hover:bg-green-600 hover:text-white rounded-lg transition-all">
                         <Check className="h-4 w-4" />
                       </button>
-                      <button onClick={() => handleRejectDeposit(d.id)} className="p-2 bg-red-600/20 text-red-500 hover:bg-red-600 hover:text-white rounded-lg transition-all">
+                      <button onClick={() => setShowRejectDepositModal(d.id)} className="p-2 bg-red-600/20 text-red-500 hover:bg-red-600 hover:text-white rounded-lg transition-all">
                         <X className="h-4 w-4" />
                       </button>
                     </td>
@@ -637,8 +664,17 @@ const AdminPanel: React.FC = () => {
       {/* Withdrawals Tab */}
       {activeTab === 'withdrawals' && (
         <div className="bg-zinc-900 border border-zinc-800 rounded-3xl overflow-hidden">
-          <div className="p-6 border-b border-zinc-800">
+          <div className="p-6 border-b border-zinc-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
             <h2 className="text-xl font-bold text-white">Pending Withdrawals</h2>
+            <div className="relative w-full md:w-64">
+              <input
+                type="text"
+                placeholder="Search withdrawals..."
+                className="w-full bg-zinc-800 border border-zinc-700 rounded-xl py-2 px-4 text-sm text-white focus:outline-none focus:border-orange-500"
+                value={searchTermWithdrawals}
+                onChange={(e) => setSearchTermWithdrawals(e.target.value)}
+              />
+            </div>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left">
@@ -652,7 +688,14 @@ const AdminPanel: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-800">
-                {withdrawals.filter(w => w.status === 'pending').map(w => (
+                {withdrawals
+                  .filter(w => w.status === 'pending')
+                  .filter(w => 
+                    w.userEmail.toLowerCase().includes(searchTermWithdrawals.toLowerCase()) ||
+                    w.walletAddress.toLowerCase().includes(searchTermWithdrawals.toLowerCase()) ||
+                    w.userId.toLowerCase().includes(searchTermWithdrawals.toLowerCase())
+                  )
+                  .map(w => (
                   <tr key={w.id} className="hover:bg-zinc-800/30 transition-colors">
                     <td className="px-6 py-4">
                       <div className="text-white font-bold">{w.userEmail}</div>
@@ -666,10 +709,10 @@ const AdminPanel: React.FC = () => {
                       <span className="px-2 py-1 bg-orange-900/20 text-orange-500 text-[10px] font-bold uppercase rounded">Pending</span>
                     </td>
                     <td className="px-6 py-4 text-right space-x-2">
-                      <button onClick={() => handleCompleteWithdrawal(w)} className="p-2 bg-green-600/20 text-green-500 hover:bg-green-600 hover:text-white rounded-lg transition-all">
+                      <button onClick={() => setShowCompleteWithdrawalModal(w)} className="p-2 bg-green-600/20 text-green-500 hover:bg-green-600 hover:text-white rounded-lg transition-all">
                         <Check className="h-4 w-4" />
                       </button>
-                      <button onClick={() => handleRejectWithdrawal(w.id)} className="p-2 bg-red-600/20 text-red-500 hover:bg-red-600 hover:text-white rounded-lg transition-all">
+                      <button onClick={() => setShowRejectWithdrawalModal(w.id)} className="p-2 bg-red-600/20 text-red-500 hover:bg-red-600 hover:text-white rounded-lg transition-all">
                         <X className="h-4 w-4" />
                       </button>
                     </td>
@@ -782,7 +825,7 @@ const AdminPanel: React.FC = () => {
                           <button onClick={() => handleApproveVideo(v)} className="p-2 bg-green-600/20 text-green-500 hover:bg-green-600 hover:text-white rounded-lg transition-all">
                             <Check className="h-4 w-4" />
                           </button>
-                          <button onClick={() => handleRejectVideo(v)} className="p-2 bg-red-600/20 text-red-500 hover:bg-red-600 hover:text-white rounded-lg transition-all">
+                          <button onClick={() => setShowRejectVideoModal(v)} className="p-2 bg-red-600/20 text-red-500 hover:bg-red-600 hover:text-white rounded-lg transition-all">
                             <X className="h-4 w-4" />
                           </button>
                         </>
@@ -797,8 +840,17 @@ const AdminPanel: React.FC = () => {
       )}
       {activeTab === 'listings' && (
         <div className="bg-zinc-900 border border-zinc-800 rounded-3xl overflow-hidden">
-          <div className="p-6 border-b border-zinc-800">
+          <div className="p-6 border-b border-zinc-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
             <h2 className="text-xl font-bold text-white">All Listings</h2>
+            <div className="relative w-full md:w-64">
+              <input
+                type="text"
+                placeholder="Search listings..."
+                className="w-full bg-zinc-800 border border-zinc-700 rounded-xl py-2 px-4 text-sm text-white focus:outline-none focus:border-orange-500"
+                value={searchTermListings}
+                onChange={(e) => setSearchTermListings(e.target.value)}
+              />
+            </div>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left">
@@ -812,7 +864,13 @@ const AdminPanel: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-800">
-                {listings.map(l => (
+                {listings
+                  .filter(l => 
+                    l.title.toLowerCase().includes(searchTermListings.toLowerCase()) ||
+                    l.sellerName.toLowerCase().includes(searchTermListings.toLowerCase()) ||
+                    l.category.toLowerCase().includes(searchTermListings.toLowerCase())
+                  )
+                  .map(l => (
                   <tr key={l.id} className="hover:bg-zinc-800/30 transition-colors">
                     <td className="px-6 py-4">
                       <div className="text-white font-bold">{l.title}</div>
@@ -833,7 +891,7 @@ const AdminPanel: React.FC = () => {
                       </span>
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <button onClick={() => handleDeleteListing(l.id)} className="p-2 text-zinc-400 hover:text-red-500 transition-colors">
+                      <button onClick={() => setShowDeleteListingModal(l.id)} className="p-2 text-zinc-400 hover:text-red-500 transition-colors">
                         <X className="h-4 w-4" />
                       </button>
                     </td>
@@ -848,8 +906,17 @@ const AdminPanel: React.FC = () => {
       {/* Orders Tab */}
       {activeTab === 'orders' && !selectedOrder && (
         <div className="bg-zinc-900 border border-zinc-800 rounded-3xl overflow-hidden">
-          <div className="p-6 border-b border-zinc-800">
+          <div className="p-6 border-b border-zinc-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
             <h2 className="text-xl font-bold text-white">All Orders</h2>
+            <div className="relative w-full md:w-64">
+              <input
+                type="text"
+                placeholder="Search orders..."
+                className="w-full bg-zinc-800 border border-zinc-700 rounded-xl py-2 px-4 text-sm text-white focus:outline-none focus:border-orange-500"
+                value={searchTermOrders}
+                onChange={(e) => setSearchTermOrders(e.target.value)}
+              />
+            </div>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left">
@@ -862,7 +929,14 @@ const AdminPanel: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-800">
-                {orders.map(o => (
+                {orders
+                  .filter(o => 
+                    o.id.toLowerCase().includes(searchTermOrders.toLowerCase()) ||
+                    o.listingTitle.toLowerCase().includes(searchTermOrders.toLowerCase()) ||
+                    o.buyerId.toLowerCase().includes(searchTermOrders.toLowerCase()) ||
+                    o.sellerId.toLowerCase().includes(searchTermOrders.toLowerCase())
+                  )
+                  .map(o => (
                   <tr key={o.id} className="hover:bg-zinc-800/30 transition-colors">
                     <td className="px-6 py-4">
                       <div className="text-white font-bold">#{o.id.slice(-8)}</div>
@@ -917,10 +991,10 @@ const AdminPanel: React.FC = () => {
                       )}
                       {o.status === 'disputed' && (
                         <>
-                          <button onClick={() => handleResolveOrder(o.id, 'refund')} className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg">
+                          <button onClick={() => setShowResolveOrderModal({ orderId: o.id, decision: 'refund' })} className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg">
                             Refund
                           </button>
-                          <button onClick={() => handleResolveOrder(o.id, 'release')} className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded-lg">
+                          <button onClick={() => setShowResolveOrderModal({ orderId: o.id, decision: 'release' })} className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded-lg">
                             Release
                           </button>
                         </>
@@ -1071,14 +1145,14 @@ const AdminPanel: React.FC = () => {
                   <p className="text-xs text-zinc-500 mb-6">As an administrator, your decision is final. Choose carefully based on the evidence and chat logs provided.</p>
                   <div className="grid grid-cols-1 gap-3">
                     <button 
-                      onClick={() => handleResolveOrder(selectedOrder.id, 'release')}
+                      onClick={() => setShowResolveOrderModal({ orderId: selectedOrder.id, decision: 'release' })}
                       className="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-2xl font-bold transition-all flex items-center justify-center"
                     >
                       <Check className="h-5 w-5 mr-2" />
                       Release to Seller
                     </button>
                     <button 
-                      onClick={() => handleResolveOrder(selectedOrder.id, 'refund')}
+                      onClick={() => setShowResolveOrderModal({ orderId: selectedOrder.id, decision: 'refund' })}
                       className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-2xl font-bold transition-all flex items-center justify-center"
                     >
                       <Check className="h-5 w-5 mr-2" />
@@ -1091,20 +1165,14 @@ const AdminPanel: React.FC = () => {
               <div className="bg-zinc-900 border border-zinc-800 p-6 rounded-3xl">
                 <h3 className="text-lg font-bold text-white mb-4">Quick Actions</h3>
                 <div className="space-y-3">
-                  <Link 
-                    to={`/admin?tab=users&uid=${selectedOrder.buyerId}`}
-                    className="w-full p-3 bg-zinc-800 hover:bg-zinc-700 text-white rounded-2xl text-sm font-bold flex items-center transition-all"
-                  >
+                  <div className="w-full p-3 bg-zinc-800 text-zinc-400 rounded-2xl text-sm font-bold flex items-center">
                     <User className="h-4 w-4 mr-2" />
-                    View Buyer Profile
-                  </Link>
-                  <Link 
-                    to={`/admin?tab=users&uid=${selectedOrder.sellerId}`}
-                    className="w-full p-3 bg-zinc-800 hover:bg-zinc-700 text-white rounded-2xl text-sm font-bold flex items-center transition-all"
-                  >
+                    Buyer: {selectedOrder.buyerId}
+                  </div>
+                  <div className="w-full p-3 bg-zinc-800 text-zinc-400 rounded-2xl text-sm font-bold flex items-center">
                     <User className="h-4 w-4 mr-2" />
-                    View Seller Profile
-                  </Link>
+                    Seller: {selectedOrder.sellerId}
+                  </div>
                 </div>
               </div>
             </div>
@@ -1113,8 +1181,17 @@ const AdminPanel: React.FC = () => {
       )}
       {activeTab === 'users' && (
         <div className="bg-zinc-900 border border-zinc-800 rounded-3xl overflow-hidden">
-          <div className="p-6 border-b border-zinc-800">
+          <div className="p-6 border-b border-zinc-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
             <h2 className="text-xl font-bold text-white">Platform Users</h2>
+            <div className="relative w-full md:w-64">
+              <input
+                type="text"
+                placeholder="Search users..."
+                className="w-full bg-zinc-800 border border-zinc-700 rounded-xl py-2 px-4 text-sm text-white focus:outline-none focus:border-orange-500"
+                value={searchTermUsers}
+                onChange={(e) => setSearchTermUsers(e.target.value)}
+              />
+            </div>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left">
@@ -1128,7 +1205,13 @@ const AdminPanel: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-800">
-                {users.map(u => (
+                {users
+                  .filter(u => 
+                    u.email.toLowerCase().includes(searchTermUsers.toLowerCase()) ||
+                    (u.displayName || '').toLowerCase().includes(searchTermUsers.toLowerCase()) ||
+                    u.uid.toLowerCase().includes(searchTermUsers.toLowerCase())
+                  )
+                  .map(u => (
                   <tr key={u.uid} className="hover:bg-zinc-800/30 transition-colors">
                     <td className="px-6 py-4">
                       <div className="text-white font-bold flex items-center">
@@ -1415,6 +1498,196 @@ const AdminPanel: React.FC = () => {
             >
               Save All Settings
             </button>
+          </div>
+        </div>
+      )}
+      {/* Admin Modals */}
+      {showDeleteListingModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl w-full max-w-md p-8 shadow-2xl">
+            <h2 className="text-2xl font-bold text-white mb-4">Deactivate Listing</h2>
+            <p className="text-zinc-400 mb-8">Are you sure you want to deactivate this listing? It will no longer be visible in the marketplace.</p>
+            <div className="flex gap-4">
+              <button
+                onClick={() => setShowDeleteListingModal(null)}
+                className="flex-1 py-3 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl font-bold transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleDeleteListing(showDeleteListingModal)}
+                className="flex-1 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold transition-all"
+              >
+                Deactivate
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showRejectVideoModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl w-full max-w-md p-8 shadow-2xl">
+            <h2 className="text-2xl font-bold text-white mb-4">Reject Video</h2>
+            <p className="text-zinc-400 mb-4">Please enter the rejection reason for this video:</p>
+            <textarea
+              className="w-full bg-zinc-800 border border-zinc-700 rounded-xl py-3 px-4 text-white focus:outline-none focus:border-orange-500 mb-6"
+              rows={4}
+              placeholder="Explain why the video was rejected..."
+              value={modalInput}
+              onChange={(e) => setModalInput(e.target.value)}
+            />
+            <div className="flex gap-4">
+              <button
+                onClick={() => {
+                  setShowRejectVideoModal(null);
+                  setModalInput('');
+                }}
+                className="flex-1 py-3 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl font-bold transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleRejectVideo(showRejectVideoModal, modalInput || 'No reason provided')}
+                className="flex-1 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold transition-all"
+              >
+                Reject Video
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showApproveDepositModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl w-full max-w-md p-8 shadow-2xl">
+            <h2 className="text-2xl font-bold text-white mb-4">Approve Deposit</h2>
+            <p className="text-zinc-400 mb-8">Are you sure you want to approve this deposit of <span className="text-white font-bold">{showApproveDepositModal.amount} USDT</span> for <span className="text-white font-bold">{showApproveDepositModal.userEmail}</span>?</p>
+            <div className="flex gap-4">
+              <button
+                onClick={() => setShowApproveDepositModal(null)}
+                className="flex-1 py-3 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl font-bold transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  handleApproveDeposit(showApproveDepositModal);
+                  setShowApproveDepositModal(null);
+                }}
+                className="flex-1 py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold transition-all"
+              >
+                Approve
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showRejectDepositModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl w-full max-w-md p-8 shadow-2xl">
+            <h2 className="text-2xl font-bold text-white mb-4">Reject Deposit</h2>
+            <p className="text-zinc-400 mb-8">Are you sure you want to reject this deposit request?</p>
+            <div className="flex gap-4">
+              <button
+                onClick={() => setShowRejectDepositModal(null)}
+                className="flex-1 py-3 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl font-bold transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  handleRejectDeposit(showRejectDepositModal);
+                  setShowRejectDepositModal(null);
+                }}
+                className="flex-1 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold transition-all"
+              >
+                Reject
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showCompleteWithdrawalModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl w-full max-w-md p-8 shadow-2xl">
+            <h2 className="text-2xl font-bold text-white mb-4">Complete Withdrawal</h2>
+            <p className="text-zinc-400 mb-8">Are you sure you want to mark this withdrawal of <span className="text-white font-bold">{showCompleteWithdrawalModal.amount} USDT</span> for <span className="text-white font-bold">{showCompleteWithdrawalModal.userEmail}</span> as completed?</p>
+            <div className="flex gap-4">
+              <button
+                onClick={() => setShowCompleteWithdrawalModal(null)}
+                className="flex-1 py-3 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl font-bold transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  handleCompleteWithdrawal(showCompleteWithdrawalModal);
+                  setShowCompleteWithdrawalModal(null);
+                }}
+                className="flex-1 py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold transition-all"
+              >
+                Complete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showRejectWithdrawalModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl w-full max-w-md p-8 shadow-2xl">
+            <h2 className="text-2xl font-bold text-white mb-4">Reject Withdrawal</h2>
+            <p className="text-zinc-400 mb-8">Are you sure you want to reject this withdrawal request?</p>
+            <div className="flex gap-4">
+              <button
+                onClick={() => setShowRejectWithdrawalModal(null)}
+                className="flex-1 py-3 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl font-bold transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  handleRejectWithdrawal(showRejectWithdrawalModal);
+                  setShowRejectWithdrawalModal(null);
+                }}
+                className="flex-1 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold transition-all"
+              >
+                Reject
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showResolveOrderModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl w-full max-w-md p-8 shadow-2xl">
+            <h2 className="text-2xl font-bold text-white mb-4">Resolve Dispute</h2>
+            <p className="text-zinc-400 mb-8">
+              Are you sure you want to <span className={`font-bold ${showResolveOrderModal.decision === 'refund' ? 'text-blue-500' : 'text-green-500'}`}>{showResolveOrderModal.decision}</span> this order? This action is final and will update balances accordingly.
+            </p>
+            <div className="flex gap-4">
+              <button
+                onClick={() => setShowResolveOrderModal(null)}
+                className="flex-1 py-3 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl font-bold transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  handleResolveOrder(showResolveOrderModal.orderId, showResolveOrderModal.decision);
+                  setShowResolveOrderModal(null);
+                }}
+                className={`flex-1 py-3 text-white rounded-xl font-bold transition-all ${
+                  showResolveOrderModal.decision === 'refund' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-green-600 hover:bg-green-700'
+                }`}
+              >
+                Confirm {showResolveOrderModal.decision === 'refund' ? 'Refund' : 'Release'}
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -4,8 +4,10 @@ import { collection, query, where, onSnapshot, doc, updateDoc, increment, getDoc
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { useAuth } from '../AuthContext';
 import { Order, Dispute } from '../types';
-import { Package, Clock, CheckCircle, AlertCircle, MessageSquare, Shield, ArrowRight } from 'lucide-react';
+import { Package, Clock, CheckCircle, AlertCircle, MessageSquare, Shield, ArrowRight, Star } from 'lucide-react';
 import { toast } from 'sonner';
+import { Review } from '../types';
+import { uploadFile } from '../lib/upload';
 
 const Orders: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -14,9 +16,30 @@ const Orders: React.FC = () => {
   const [sellingOrders, setSellingOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'buying' | 'selling'>('buying');
+  const [showCompleteModal, setShowCompleteModal] = useState<Order | null>(null);
+  const [showDisputeModal, setShowDisputeModal] = useState<Order | null>(null);
+  const [disputeFile, setDisputeFile] = useState<File | null>(null);
+  const [showDeliverModal, setShowDeliverModal] = useState<string | null>(null);
+  const [deliveryFile, setDeliveryFile] = useState<File | null>(null);
+  const [showReviewModal, setShowReviewModal] = useState<Order | null>(null);
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState('');
+  const [modalInput, setModalInput] = useState('');
+  const [userReviews, setUserReviews] = useState<Record<string, boolean>>({});
+  const [submittingReview, setSubmittingReview] = useState(false);
 
   useEffect(() => {
     if (!profile) return;
+
+    const qReviews = query(collection(db, 'reviews'), where('fromId', '==', profile.uid));
+    const unsubReviews = onSnapshot(qReviews, (snapshot) => {
+      const reviewsMap: Record<string, boolean> = {};
+      snapshot.docs.forEach(doc => {
+        const data = doc.data();
+        reviewsMap[data.orderId] = true;
+      });
+      setUserReviews(reviewsMap);
+    });
 
     const qBuying = query(collection(db, 'orders'), where('buyerId', '==', profile.uid));
     const unsubBuying = onSnapshot(qBuying, (snapshot) => {
@@ -49,89 +72,95 @@ const Orders: React.FC = () => {
     return () => {
       unsubBuying();
       unsubSelling();
+      unsubReviews();
     };
   }, [profile, id]);
 
   const handleConfirmDelivery = async (order: Order) => {
-    if (window.confirm('Are you sure you want to confirm delivery? This will release funds to the seller.')) {
-      try {
-        const orderRef = doc(db, 'orders', order.id);
-        const sellerRef = doc(db, 'users', order.sellerId);
-        const buyerRef = doc(db, 'users', order.buyerId);
+    try {
+      const orderRef = doc(db, 'orders', order.id);
+      const sellerRef = doc(db, 'users', order.sellerId);
+      const buyerRef = doc(db, 'users', order.buyerId);
 
-        // 1. Update Order Status
-        await updateDoc(orderRef, { 
-          status: 'completed',
-          updatedAt: new Date().toISOString()
-        });
+      // 1. Update Order Status
+      await updateDoc(orderRef, { 
+        status: 'completed',
+        updatedAt: new Date().toISOString()
+      });
 
-        // 2. Move funds from Buyer Escrow to Seller Available
-        await updateDoc(buyerRef, {
-          escrowBalance: increment(-order.amount)
-        });
+      // 2. Move funds from Buyer Escrow to Seller Available
+      await updateDoc(buyerRef, {
+        escrowBalance: increment(-order.amount)
+      });
 
-        const totalFees = order.escrowFee + (order.featuredFee || 0);
-        await updateDoc(sellerRef, {
-          availableBalance: increment(order.amount - totalFees)
-        });
+      const totalFees = order.escrowFee + (order.featuredFee || 0);
+      await updateDoc(sellerRef, {
+        withdrawableBalance: increment(order.amount - totalFees)
+      });
 
-        // 3. Distribute Commissions
-        const buyerSnap = await getDoc(buyerRef);
-        if (buyerSnap.exists()) {
-          const buyerProfile = buyerSnap.data();
-          const referralChain = buyerProfile.referralChain || [];
-          const settingsSnap = await getDoc(doc(db, 'settings', 'platform'));
-          const settings = settingsSnap.data();
-          const commissionLevels = settings?.referralCommissionLevels || {};
+      // 3. Distribute Commissions
+      const buyerSnap = await getDoc(buyerRef);
+      if (buyerSnap.exists()) {
+        const buyerProfile = buyerSnap.data();
+        const referralChain = buyerProfile.referralChain || [];
+        const settingsSnap = await getDoc(doc(db, 'settings', 'platform'));
+        const settings = settingsSnap.data();
+        const commissionLevels = settings?.referralCommissionLevels || {};
 
-          for (let i = 0; i < referralChain.length; i++) {
-            const level = i + 1;
-            const influencerId = referralChain[i];
-            const sharePercent = commissionLevels[level] || 0;
+        for (let i = 0; i < referralChain.length; i++) {
+          const level = i + 1;
+          const influencerId = referralChain[i];
+          const sharePercent = commissionLevels[level] || 0;
+          
+          if (sharePercent > 0) {
+            const commissionAmount = order.escrowFee * (sharePercent / 100);
+            const commissionId = `${order.id}_L${level}`;
             
-            if (sharePercent > 0) {
-              const commissionAmount = order.escrowFee * (sharePercent / 100);
-              const commissionId = `${order.id}_L${level}`;
-              
-              await setDoc(doc(db, 'commissions', commissionId), {
-                id: commissionId,
-                orderId: order.id,
-                influencerId,
-                amount: commissionAmount,
-                level,
-                status: 'approved',
-                createdAt: new Date().toISOString()
-              });
+            await setDoc(doc(db, 'commissions', commissionId), {
+              id: commissionId,
+              orderId: order.id,
+              influencerId,
+              amount: commissionAmount,
+              level,
+              status: 'approved',
+              createdAt: new Date().toISOString()
+            });
 
-              // Update influencer profile
-              const influencerRef = doc(db, 'influencers', influencerId);
-              const influencerSnap = await getDoc(influencerRef);
-              if (influencerSnap.exists()) {
-                await updateDoc(influencerRef, {
-                  totalEarnings: increment(commissionAmount),
-                  totalSales: increment(1),
-                  totalVolume: increment(order.amount),
-                  [`levelEarnings.${level}`]: increment(commissionAmount)
-                });
-              }
+            // Update influencer profile
+            const influencerRef = doc(db, 'influencers', influencerId);
+            const influencerSnap = await getDoc(influencerRef);
+            if (influencerSnap.exists()) {
+              await updateDoc(influencerRef, {
+                totalEarnings: increment(commissionAmount),
+                totalSales: increment(1),
+                totalVolume: increment(order.amount),
+                [`levelEarnings.${level}`]: increment(commissionAmount)
+              });
             }
           }
         }
-
-        toast.success('Order confirmed and funds released!');
-      } catch (error) {
-        toast.error('Failed to confirm delivery');
       }
+
+      toast.success('Order confirmed and funds released!');
+      setShowCompleteModal(null);
+    } catch (error) {
+      toast.error('Failed to confirm delivery');
     }
   };
 
-  const handleOpenDispute = async (order: Order, reason: Dispute['reason']) => {
+  const handleOpenDispute = async (order: Order, reason: string, file: File | null) => {
     try {
+      let proofUrl = '';
+      if (file) {
+        proofUrl = await uploadFile(file, 'disputes/proofs', profile?.uid || 'unknown');
+      }
+
       await addDoc(collection(db, 'disputes'), {
         orderId: order.id,
         buyerId: order.buyerId,
         sellerId: order.sellerId,
         reason: reason,
+        proof_url: proofUrl,
         status: 'open',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -148,24 +177,81 @@ const Orders: React.FC = () => {
         createdAt: new Date().toISOString(),
       });
       toast.success('Dispute opened successfully.');
+      setShowDisputeModal(null);
+      setModalInput('');
+      setDisputeFile(null);
     } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, 'disputes');
+      handleFirestoreError(error, OperationType.WRITE, 'disputes/timeline');
     }
   };
 
-  const handleDeliver = async (orderId: string) => {
-    const details = window.prompt('Enter account details / delivery info to submit:');
-    if (details) {
-      try {
-        await updateDoc(doc(db, 'orders', orderId), {
-          status: 'delivered',
-          deliveryDetails: details,
-          updatedAt: new Date().toISOString()
+  const handleDeliver = async (orderId: string, details: string, file: File | null) => {
+    try {
+      let fileUrl = '';
+      if (file) {
+        fileUrl = await uploadFile(file, 'deliveries/files', profile?.uid || 'unknown');
+        await addDoc(collection(db, 'deliveries'), {
+          order_id: orderId,
+          file_url: fileUrl,
+          message: details,
+          timestamp: new Date().toISOString()
         });
-        toast.success('Order submitted to buyer!');
-      } catch (error) {
-        toast.error('Failed to submit order');
       }
+
+      await updateDoc(doc(db, 'orders', orderId), {
+        status: 'delivered',
+        deliveryDetails: details,
+        updatedAt: new Date().toISOString()
+      });
+      await addDoc(collection(db, 'timeline'), {
+        orderId,
+        type: 'delivery_submitted',
+        description: 'Seller submitted account details/delivery info.',
+        userId: profile?.uid,
+        createdAt: new Date().toISOString()
+      });
+      toast.success('Delivery submitted successfully!');
+      setShowDeliverModal(null);
+      setModalInput('');
+      setDeliveryFile(null);
+    } catch (error) {
+      toast.error('Failed to submit delivery');
+      handleFirestoreError(error, OperationType.WRITE, 'orders/timeline');
+    }
+  };
+
+  const handleLeaveReview = async (order: Order) => {
+    if (!profile || submittingReview) return;
+    if (!reviewComment.trim()) {
+      toast.error('Please enter a comment');
+      return;
+    }
+    setSubmittingReview(true);
+    try {
+      const reviewId = `${order.id}_${profile.uid}`;
+      const reviewData: Omit<Review, 'id'> = {
+        orderId: order.id,
+        fromId: profile.uid,
+        toId: activeTab === 'buying' ? order.sellerId : order.buyerId,
+        fromName: profile.displayName || profile.email.split('@')[0],
+        rating: reviewRating,
+        comment: reviewComment.trim(),
+        type: activeTab === 'buying' ? 'buyer_to_seller' : 'seller_to_buyer',
+        createdAt: new Date().toISOString()
+      };
+
+      console.log('Submitting review:', reviewData);
+      await setDoc(doc(db, 'reviews', reviewId), reviewData);
+      toast.success('Review submitted successfully!');
+      setShowReviewModal(null);
+      setReviewRating(5);
+      setReviewComment('');
+    } catch (error) {
+      console.error('Review submission error:', error);
+      toast.error('Failed to submit review');
+      handleFirestoreError(error, OperationType.WRITE, 'reviews');
+    } finally {
+      setSubmittingReview(false);
     }
   };
 
@@ -252,13 +338,16 @@ const Orders: React.FC = () => {
                       {new Date(order.createdAt).toLocaleDateString()}
                     </div>
                     <div className="font-bold text-white">{order.amount} USDT</div>
+                    <div className="text-orange-500 text-xs font-bold">
+                      View {activeTab === 'buying' ? 'Seller' : 'Buyer'}
+                    </div>
                   </div>
                 </div>
 
                 <div className="flex flex-col sm:flex-row md:flex-col gap-3 justify-center min-w-[160px]">
                   {activeTab === 'buying' && (order.status === 'delivered' || order.status === 'active' || order.status === 'in_progress') && (
                     <button
-                      onClick={() => handleConfirmDelivery(order)}
+                      onClick={() => setShowCompleteModal(order)}
                       className="w-full bg-green-600 hover:bg-green-700 text-white py-2 rounded-xl text-sm font-bold transition-all"
                     >
                       Verify & Complete Order
@@ -266,10 +355,7 @@ const Orders: React.FC = () => {
                   )}
                   {(order.status === 'active' || order.status === 'in_progress' || order.status === 'delivered') && (
                     <button
-                      onClick={() => {
-                        const reason = window.prompt('Enter dispute reason:');
-                        if (reason) handleOpenDispute(order, 'other');
-                      }}
+                      onClick={() => setShowDisputeModal(order)}
                       className="w-full bg-red-600 hover:bg-red-700 text-white py-2 rounded-xl text-sm font-bold transition-all"
                     >
                       Open Dispute
@@ -313,11 +399,24 @@ const Orders: React.FC = () => {
                   )}
                   {activeTab === 'selling' && (order.status === 'active' || order.status === 'in_progress') && (
                     <button
-                      onClick={() => handleDeliver(order.id)}
+                      onClick={() => setShowDeliverModal(order.id)}
                       className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-xl text-sm font-bold transition-all"
                     >
                       Submit Order
                     </button>
+                  )}
+                  {order.status === 'completed' && !userReviews[order.id] && (
+                    <button
+                      onClick={() => setShowReviewModal(order)}
+                      className="w-full bg-orange-600 hover:bg-orange-700 text-white py-2 rounded-xl text-sm font-bold transition-all"
+                    >
+                      Leave Feedback
+                    </button>
+                  )}
+                  {order.status === 'completed' && userReviews[order.id] && (
+                    <div className="w-full bg-zinc-800 text-zinc-500 py-2 rounded-xl text-sm font-bold text-center border border-zinc-700">
+                      Feedback Left
+                    </div>
                   )}
                   <Link
                     to={`/messages?order=${order.id}`}
@@ -344,6 +443,164 @@ const Orders: React.FC = () => {
           </div>
         )}
       </div>
+      {/* Modals */}
+      {showCompleteModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl w-full max-w-md p-8 shadow-2xl">
+            <h2 className="text-2xl font-bold text-white mb-4">Confirm Delivery</h2>
+            <p className="text-zinc-400 mb-8">Are you sure you want to confirm delivery? This will release funds to the seller.</p>
+            <div className="flex gap-4">
+              <button
+                onClick={() => setShowCompleteModal(null)}
+                className="flex-1 py-3 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl font-bold transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleConfirmDelivery(showCompleteModal)}
+                className="flex-1 py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold transition-all"
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showDisputeModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl w-full max-w-md p-8 shadow-2xl">
+            <h2 className="text-2xl font-bold text-white mb-4">Open Dispute</h2>
+            <p className="text-zinc-400 mb-4">Please enter the reason for the dispute:</p>
+            <textarea
+              className="w-full bg-zinc-800 border border-zinc-700 rounded-xl py-3 px-4 text-white focus:outline-none focus:border-orange-500 mb-4"
+              rows={4}
+              placeholder="Explain the issue..."
+              value={modalInput}
+              onChange={(e) => setModalInput(e.target.value)}
+            />
+            <input
+              type="file"
+              onChange={(e) => setDisputeFile(e.target.files?.[0] || null)}
+              className="w-full bg-zinc-800 border border-zinc-700 rounded-xl py-3 px-4 text-white focus:outline-none focus:border-orange-500 mb-6"
+            />
+            <div className="flex gap-4">
+              <button
+                onClick={() => {
+                  setShowDisputeModal(null);
+                  setModalInput('');
+                  setDisputeFile(null);
+                }}
+                className="flex-1 py-3 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl font-bold transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleOpenDispute(showDisputeModal, modalInput || 'No reason provided', disputeFile)}
+                className="flex-1 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold transition-all"
+              >
+                Submit Dispute
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showDeliverModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl w-full max-w-md p-8 shadow-2xl">
+            <h2 className="text-2xl font-bold text-white mb-4">Submit Order</h2>
+            <p className="text-zinc-400 mb-4">Enter account details or delivery info for the buyer:</p>
+            <textarea
+              className="w-full bg-zinc-800 border border-zinc-700 rounded-xl py-3 px-4 text-white focus:outline-none focus:border-orange-500 mb-4"
+              rows={4}
+              placeholder="Account credentials, download links, etc..."
+              value={modalInput}
+              onChange={(e) => setModalInput(e.target.value)}
+            />
+            <input
+              type="file"
+              onChange={(e) => setDeliveryFile(e.target.files?.[0] || null)}
+              className="w-full bg-zinc-800 border border-zinc-700 rounded-xl py-3 px-4 text-white focus:outline-none focus:border-orange-500 mb-6"
+            />
+            <div className="flex gap-4">
+              <button
+                onClick={() => {
+                  setShowDeliverModal(null);
+                  setModalInput('');
+                  setDeliveryFile(null);
+                }}
+                className="flex-1 py-3 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl font-bold transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleDeliver(showDeliverModal, modalInput, deliveryFile)}
+                disabled={!modalInput && !deliveryFile}
+                className="flex-1 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-zinc-700 disabled:text-zinc-500 text-white rounded-xl font-bold transition-all"
+              >
+                Submit
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {showReviewModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl w-full max-w-md p-8 shadow-2xl">
+            <h2 className="text-2xl font-bold text-white mb-2">
+              {activeTab === 'buying' ? 'Review Seller' : 'Review Buyer'}
+            </h2>
+            <p className="text-zinc-400 mb-6 text-sm">Rate your experience with this {activeTab === 'buying' ? 'seller' : 'buyer'}.</p>
+            
+            <div className="flex justify-center gap-2 mb-8">
+              {[1, 2, 3, 4, 5].map((star) => (
+                <button
+                  key={star}
+                  onClick={() => setReviewRating(star)}
+                  className="transition-transform hover:scale-110"
+                >
+                  <Star
+                    className={`h-8 w-8 ${
+                      star <= reviewRating ? 'fill-orange-500 text-orange-500' : 'text-zinc-700'
+                    }`}
+                  />
+                </button>
+              ))}
+            </div>
+
+            <textarea
+              className="w-full bg-zinc-800 border border-zinc-700 rounded-xl py-3 px-4 text-white focus:outline-none focus:border-orange-500 mb-6"
+              rows={4}
+              placeholder="Write your review here..."
+              value={reviewComment}
+              onChange={(e) => setReviewComment(e.target.value)}
+            />
+
+            <div className="flex gap-4">
+              <button
+                onClick={() => {
+                  setShowReviewModal(null);
+                  setReviewRating(5);
+                  setReviewComment('');
+                }}
+                className="flex-1 py-3 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl font-bold transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleLeaveReview(showReviewModal)}
+                disabled={submittingReview}
+                className={`flex-1 py-3 bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-bold transition-all ${
+                  submittingReview ? 'opacity-50 cursor-not-allowed' : ''
+                }`}
+              >
+                {submittingReview ? 'Submitting...' : 'Submit Review'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

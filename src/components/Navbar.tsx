@@ -28,6 +28,7 @@ const Navbar: React.FC = () => {
             <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
               <Link to="/marketplace" className="text-zinc-300 hover:text-white px-3 py-2 text-sm font-medium">Marketplace</Link>
               <Link to="/leaderboard" className="text-zinc-300 hover:text-white px-3 py-2 text-sm font-medium">Leaderboard</Link>
+              <Link to="/reviews" className="text-zinc-300 hover:text-white px-3 py-2 text-sm font-medium">Reviews</Link>
               <Link to="/influencer" className="text-zinc-300 hover:text-white px-3 py-2 text-sm font-medium">Earn USDT</Link>
               {user && (
                 <>
@@ -42,7 +43,7 @@ const Navbar: React.FC = () => {
               <>
                 <Link to="/wallet" className="hidden sm:flex items-center text-zinc-300 hover:text-white px-3 py-2 text-sm font-medium bg-zinc-800 rounded-lg">
                   <Wallet className="h-4 w-4 mr-2 text-orange-500" />
-                  <span>{profile?.availableBalance.toFixed(2)} USDT</span>
+                  <span>{((profile?.availableBalance || 0) + (profile?.withdrawableBalance || 0)).toFixed(2)} USDT</span>
                 </Link>
                 <div className="hidden sm:flex relative group">
                   <button className="flex items-center text-zinc-300 hover:text-white px-3 py-2 text-sm font-medium">
@@ -56,6 +57,7 @@ const Navbar: React.FC = () => {
                     )}
                   </button>
                   <div className="absolute right-0 w-48 mt-2 py-2 bg-zinc-800 border border-zinc-700 rounded-md shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200">
+                    <Link to={`/profile/${profile?.uid}`} className="block px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-700 hover:text-white">My Profile</Link>
                     <Link to="/dashboard" className="block px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-700 hover:text-white">Dashboard</Link>
                     <Link to="/influencer" className="block px-4 py-2 text-sm text-orange-400 hover:bg-zinc-700 hover:text-white">Influencer Program</Link>
                     {profile?.role === 'admin' && (
@@ -86,12 +88,13 @@ const Navbar: React.FC = () => {
           <div className="px-2 pt-2 pb-3 space-y-1">
             <Link to="/marketplace" className="block text-zinc-300 hover:text-white px-3 py-2 text-base font-medium" onClick={() => setIsMobileMenuOpen(false)}>Marketplace</Link>
             <Link to="/leaderboard" className="block text-zinc-300 hover:text-white px-3 py-2 text-base font-medium" onClick={() => setIsMobileMenuOpen(false)}>Leaderboard</Link>
+            <Link to="/reviews" className="block text-zinc-300 hover:text-white px-3 py-2 text-base font-medium" onClick={() => setIsMobileMenuOpen(false)}>Reviews</Link>
             <Link to="/influencer" className="block text-zinc-300 hover:text-white px-3 py-2 text-base font-medium" onClick={() => setIsMobileMenuOpen(false)}>Earn USDT</Link>
             {user && (
               <>
                 <Link to="/orders" className="block text-zinc-300 hover:text-white px-3 py-2 text-base font-medium" onClick={() => setIsMobileMenuOpen(false)}>Orders</Link>
                 <Link to="/messages" className="block text-zinc-300 hover:text-white px-3 py-2 text-base font-medium" onClick={() => setIsMobileMenuOpen(false)}>Messages</Link>
-                <Link to="/wallet" className="block text-zinc-300 hover:text-white px-3 py-2 text-base font-medium" onClick={() => setIsMobileMenuOpen(false)}>Wallet ({profile?.availableBalance.toFixed(2)} USDT)</Link>
+                <Link to="/wallet" className="block text-zinc-300 hover:text-white px-3 py-2 text-base font-medium" onClick={() => setIsMobileMenuOpen(false)}>Wallet ({((profile?.availableBalance || 0) + (profile?.withdrawableBalance || 0)).toFixed(2)} USDT)</Link>
                 <Link to="/dashboard" className="block text-zinc-300 hover:text-white px-3 py-2 text-base font-medium" onClick={() => setIsMobileMenuOpen(false)}>Dashboard</Link>
                 <button onClick={handleLogout} className="block w-full text-left text-red-400 hover:text-white px-3 py-2 text-base font-medium">Logout</button>
               </>

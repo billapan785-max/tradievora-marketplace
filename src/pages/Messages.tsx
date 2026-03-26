@@ -3,9 +3,10 @@ import { collection, query, where, onSnapshot, addDoc, orderBy, doc, getDoc } fr
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { useAuth } from '../AuthContext';
 import { Message, Order, Listing } from '../types';
-import { Send, User, Shield, AlertCircle } from 'lucide-react';
+import { Send, User, Shield, AlertCircle, Paperclip, FileText, Image as ImageIcon, Video } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
+import { uploadFile } from '../lib/upload';
 
 const Messages: React.FC = () => {
   const { profile } = useAuth();
@@ -19,6 +20,7 @@ const Messages: React.FC = () => {
   const [listing, setListing] = useState<Listing | null>(null);
   const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -75,6 +77,53 @@ const Messages: React.FC = () => {
     }
   }, [messages]);
 
+  const handleFileUpload = async (file: File | undefined) => {
+    if (!file || !profile || (!orderId && !listingId)) return;
+
+    setUploading(true);
+    try {
+      let folder = 'chat/files';
+      let type = 'file';
+      if (file.type.startsWith('image/')) {
+        folder = 'chat/images';
+        type = 'image';
+      } else if (file.type.startsWith('video/')) {
+        folder = 'chat/videos';
+        type = 'video';
+      }
+
+      const url = await uploadFile(file, folder, profile.uid);
+      
+      const messageData: any = {
+        senderId: profile.uid,
+        type,
+        url,
+        createdAt: new Date().toISOString(),
+        participants: [profile.uid]
+      };
+
+      if (orderId) {
+        messageData.orderId = orderId;
+        const otherId = order.buyerId === profile.uid ? order.sellerId : order.buyerId;
+        if (!messageData.participants.includes(otherId)) {
+          messageData.participants.push(otherId);
+        }
+      } else if (listingId && sellerId) {
+        messageData.listingId = listingId;
+        if (!messageData.participants.includes(sellerId)) {
+          messageData.participants.push(sellerId);
+        }
+      }
+
+      await addDoc(collection(db, 'messages'), messageData);
+      toast.success('File uploaded');
+    } catch (error) {
+      toast.error('Failed to upload file');
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputText.trim() || !profile || (!orderId && !listingId)) return;
@@ -90,6 +139,7 @@ const Messages: React.FC = () => {
       const messageData: any = {
         senderId: profile.uid,
         text: inputText,
+        type: 'text',
         createdAt: new Date().toISOString(),
         participants: [profile.uid]
       };
@@ -156,7 +206,17 @@ const Messages: React.FC = () => {
                   : 'bg-zinc-800 text-zinc-100 rounded-tl-none'
               }`}
             >
-              <p className="leading-relaxed">{msg.text}</p>
+              <p className="leading-relaxed">
+                {msg.type === 'text' && msg.text}
+                {msg.type === 'image' && <img src={msg.url} alt="Message" className="max-w-full rounded-lg" />}
+                {msg.type === 'video' && <video src={msg.url} controls className="max-w-full rounded-lg" />}
+                {msg.type === 'file' && (
+                  <a href={msg.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-white underline">
+                    <FileText className="h-4 w-4" />
+                    Download File
+                  </a>
+                )}
+              </p>
               <div className={`text-[10px] mt-2 opacity-50 ${msg.senderId === profile?.uid ? 'text-right' : 'text-left'}`}>
                 {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
               </div>
@@ -173,6 +233,17 @@ const Messages: React.FC = () => {
       {/* Input Area */}
       <div className="p-6 border-t border-zinc-800 bg-zinc-900/50">
         <form onSubmit={handleSendMessage} className="flex gap-4">
+          <input
+            type="file"
+            accept="image/*,application/pdf,application/zip,application/vnd.openxmlformats-officedocument.wordprocessingml.document,video/mp4"
+            onChange={(e) => handleFileUpload(e.target.files?.[0])}
+            className="hidden"
+            id="file-upload"
+            disabled={uploading}
+          />
+          <label htmlFor="file-upload" className={`cursor-pointer bg-zinc-800 hover:bg-zinc-700 text-white p-3 rounded-xl transition-all ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
+            <Paperclip className="h-6 w-6" />
+          </label>
           <input
             type="text"
             placeholder="Type your message securely..."

@@ -2,9 +2,14 @@ import express from "express";
 import { createServer as createViteServer } from "vite";
 import path from "path";
 import { fileURLToPath } from "url";
+import "dotenv/config";
+import multer from "multer";
+import { uploadFileToR2 } from "./src/services/r2Service.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+const upload = multer({ storage: multer.memoryStorage() });
 
 async function startServer() {
   const app = express();
@@ -13,6 +18,21 @@ async function startServer() {
   // API routes
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok" });
+  });
+
+  app.post("/api/upload", upload.single("file"), async (req, res) => {
+    if (!req.file) {
+      return res.status(400).json({ error: "No file uploaded" });
+    }
+    const { folder, userId } = req.body;
+    const fileName = `${folder}/${userId}/${Date.now()}-${req.file.originalname}`;
+    try {
+      const url = await uploadFileToR2(req.file.buffer, fileName, req.file.mimetype);
+      res.json({ url });
+    } catch (error) {
+      console.error("Upload error:", error);
+      res.status(500).json({ error: "Upload failed" });
+    }
   });
 
   // Vite middleware for development

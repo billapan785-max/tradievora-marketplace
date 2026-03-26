@@ -6,6 +6,7 @@ import { Listing, Order } from '../types';
 import { Plus, Package, ShoppingBag, TrendingUp, Edit, Trash2, ExternalLink, Shield, BadgeCheck } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
+import { uploadFile } from '../lib/upload';
 
 const Dashboard: React.FC = () => {
   const { profile } = useAuth();
@@ -14,6 +15,7 @@ const Dashboard: React.FC = () => {
   const [myOrders, setMyOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState<string | null>(null);
 
   // Form state for new listing
   const [newListing, setNewListing] = useState({
@@ -33,6 +35,8 @@ const Dashboard: React.FC = () => {
     vaMonthlyPrice: '',
     vaSalesPercentage: ''
   });
+  const [listingImage, setListingImage] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     if (!profile) return;
@@ -84,7 +88,13 @@ const Dashboard: React.FC = () => {
       return;
     }
 
+    setUploading(true);
     try {
+      let imageUrl = '';
+      if (listingImage) {
+        imageUrl = await uploadFile(listingImage, 'listings/images', profile.uid);
+      }
+
       const listingData: any = {
         ...newListing,
         price: parseFloat(newListing.price) || 0,
@@ -93,7 +103,8 @@ const Dashboard: React.FC = () => {
         sellerIsVerified: profile.isVerified || false,
         status: 'active',
         isFeatured: newListing.isFeatured,
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        image_url: imageUrl
       };
       
       if (newListing.serviceType === 'percentage' || newListing.serviceType === 'refund_percentage') {
@@ -132,19 +143,21 @@ const Dashboard: React.FC = () => {
         vaMonthlyPrice: '',
         vaSalesPercentage: ''
       });
+      setListingImage(null);
     } catch (error) {
       toast.error('Failed to create listing');
+    } finally {
+      setUploading(false);
     }
   };
 
   const handleDeleteListing = async (id: string) => {
-    if (window.confirm('Are you sure you want to delete this listing?')) {
-      try {
-        await deleteDoc(doc(db, 'listings', id));
-        toast.success('Listing deleted');
-      } catch (error) {
-        toast.error('Failed to delete listing');
-      }
+    try {
+      await deleteDoc(doc(db, 'listings', id));
+      toast.success('Listing deleted');
+      setShowDeleteModal(null);
+    } catch (error) {
+      toast.error('Failed to delete listing');
     }
   };
 
@@ -235,12 +248,12 @@ const Dashboard: React.FC = () => {
             <div className="bg-zinc-900 border border-zinc-800 p-8 rounded-3xl">
               <div className="flex items-center justify-between mb-4">
                 <TrendingUp className="h-8 w-8 text-green-500" />
-                <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Earnings</span>
+                <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Withdrawable</span>
               </div>
               <div className="text-4xl font-black text-white">
-                {mySales.filter(s => s.status === 'completed').reduce((acc, s) => acc + s.amount, 0).toFixed(2)}
+                {(profile?.withdrawableBalance || 0).toFixed(2)}
               </div>
-              <div className="text-zinc-500 text-sm mt-1">USDT Earned</div>
+              <div className="text-zinc-500 text-sm mt-1">USDT Available to Withdraw</div>
             </div>
           </>
         ) : (
@@ -322,7 +335,7 @@ const Dashboard: React.FC = () => {
                       <Link to={`/listing/${listing.id}`} className="inline-block p-2 text-zinc-400 hover:text-white transition-colors">
                         <ExternalLink className="h-4 w-4" />
                       </Link>
-                      <button onClick={() => handleDeleteListing(listing.id)} className="p-2 text-zinc-400 hover:text-red-500 transition-colors">
+                      <button onClick={() => setShowDeleteModal(listing.id)} className="p-2 text-zinc-400 hover:text-red-500 transition-colors">
                         <Trash2 className="h-4 w-4" />
                       </button>
                     </td>
@@ -404,6 +417,15 @@ const Dashboard: React.FC = () => {
             </div>
             <form onSubmit={handleAddListing} className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-zinc-400 mb-2">Listing Image</label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="w-full bg-zinc-800 border border-zinc-700 rounded-xl py-3 px-4 text-white focus:outline-none focus:border-orange-500"
+                    onChange={e => setListingImage(e.target.files?.[0] || null)}
+                  />
+                </div>
                 <div className="md:col-span-2">
                   <label className="block text-sm font-medium text-zinc-400 mb-2">Title</label>
                   <input
@@ -610,6 +632,29 @@ const Dashboard: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl w-full max-w-md p-8 shadow-2xl">
+            <h2 className="text-2xl font-bold text-white mb-4">Delete Listing</h2>
+            <p className="text-zinc-400 mb-8">Are you sure you want to delete this listing? This action cannot be undone.</p>
+            <div className="flex gap-4">
+              <button
+                onClick={() => setShowDeleteModal(null)}
+                className="flex-1 py-3 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl font-bold transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleDeleteListing(showDeleteModal)}
+                className="flex-1 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold transition-all"
+              >
+                Delete
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, where, onSnapshot, addDoc, doc, getDoc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, addDoc, doc, getDoc, updateDoc, increment } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { useAuth } from '../AuthContext';
 import { Deposit, Withdrawal, PlatformSettings } from '../types';
-import { Wallet as WalletIcon, ArrowDownCircle, ArrowUpCircle, Copy, Check, Info, AlertCircle } from 'lucide-react';
+import { Wallet as WalletIcon, ArrowDownCircle, ArrowUpCircle, Copy, Check, Info, AlertCircle, ArrowRightLeft } from 'lucide-react';
 import { toast } from 'sonner';
 
 const Wallet: React.FC = () => {
@@ -11,14 +11,19 @@ const Wallet: React.FC = () => {
   const [deposits, setDeposits] = useState<Deposit[]>([]);
   const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([]);
   const [settings, setSettings] = useState<PlatformSettings | null>(null);
+  const [influencer, setInfluencer] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [showDepositModal, setShowDepositModal] = useState(false);
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
+  const [showTransferModal, setShowTransferModal] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [withdrawType, setWithdrawType] = useState<'seller' | 'influencer'>('seller');
+  const [transferDirection, setTransferDirection] = useState<'available_to_seller' | 'seller_to_available'>('available_to_seller');
 
   // Form states
   const [depositForm, setDepositForm] = useState({ amount: '', txid: '', network: 'TRC20' as 'TRC20' | 'ERC20' | 'BEP20' });
   const [withdrawForm, setWithdrawForm] = useState({ amount: '', walletAddress: '', network: 'TRC20' as 'TRC20' | 'ERC20' | 'BEP20' });
+  const [transferAmount, setTransferAmount] = useState('');
 
   useEffect(() => {
     if (!profile) return;
@@ -37,6 +42,12 @@ const Wallet: React.FC = () => {
       handleFirestoreError(error, OperationType.LIST, 'withdrawals');
     });
 
+    const unsubInfluencer = onSnapshot(doc(db, 'influencers', profile.uid), (snapshot) => {
+      if (snapshot.exists()) {
+        setInfluencer(snapshot.data());
+      }
+    });
+
     const fetchSettings = async () => {
       const settingsSnap = await getDoc(doc(db, 'settings', 'platform'));
       if (settingsSnap.exists()) {
@@ -49,6 +60,7 @@ const Wallet: React.FC = () => {
     return () => {
       unsubDeposits();
       unsubWithdrawals();
+      unsubInfluencer();
     };
   }, [profile]);
 
@@ -79,7 +91,11 @@ const Wallet: React.FC = () => {
     if (!profile) return;
 
     const amount = parseFloat(withdrawForm.amount);
-    if (amount > profile.availableBalance) {
+    const available = withdrawType === 'seller' 
+      ? (profile.withdrawableBalance || 0)
+      : (influencer ? influencer.totalEarnings - influencer.withdrawnBalance : 0);
+
+    if (amount > available) {
       toast.error('Insufficient balance');
       return;
     }
@@ -91,6 +107,7 @@ const Wallet: React.FC = () => {
         amount,
         walletAddress: withdrawForm.walletAddress,
         network: withdrawForm.network,
+        type: withdrawType,
         status: 'pending',
         createdAt: new Date().toISOString()
       });
@@ -101,6 +118,59 @@ const Wallet: React.FC = () => {
       toast.error('Failed to submit withdrawal');
     }
   };
+
+  const handleTransfer = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!profile) return;
+
+    const amount = parseFloat(transferAmount);
+    if (isNaN(amount) || amount <= 0) {
+      toast.error('Please enter a valid amount');
+      return;
+    }
+
+    if (transferDirection === 'available_to_seller') {
+      if (amount > profile.availableBalance) {
+        toast.error('Insufficient available balance');
+        return;
+      }
+      try {
+        await updateDoc(doc(db, 'users', profile.uid), {
+          availableBalance: increment(-amount),
+          withdrawableBalance: increment(amount)
+        });
+        toast.success('Funds transferred to seller earnings');
+        setShowTransferModal(false);
+        setTransferAmount('');
+      } catch (error) {
+        toast.error('Transfer failed');
+      }
+    } else {
+      if (amount > (profile.withdrawableBalance || 0)) {
+        toast.error('Insufficient seller earnings');
+        return;
+      }
+      try {
+        await updateDoc(doc(db, 'users', profile.uid), {
+          availableBalance: increment(amount),
+          withdrawableBalance: increment(-amount)
+        });
+        toast.success('Funds transferred to available balance');
+        setShowTransferModal(false);
+        setTransferAmount('');
+      } catch (error) {
+        toast.error('Transfer failed');
+      }
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-orange-500"></div>
+      </div>
+    );
+  }
 
   const copyAddress = (address: string) => {
     navigator.clipboard.writeText(address);
@@ -119,7 +189,7 @@ const Wallet: React.FC = () => {
       </div>
 
       {/* Balance Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <div className="bg-zinc-900 border border-zinc-800 p-8 rounded-[32px] relative overflow-hidden group transition-all hover:border-orange-600/50">
           <div className="absolute top-0 right-0 w-48 h-48 bg-orange-600/10 blur-[80px] rounded-full -mr-12 -mt-12 group-hover:bg-orange-600/20 transition-all"></div>
           <div className="flex items-center justify-between mb-6">
@@ -128,12 +198,20 @@ const Wallet: React.FC = () => {
             </div>
             <span className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em]">Available Balance</span>
           </div>
-          <div className="text-5xl font-black text-white tracking-tighter mb-2">
-            {profile?.availableBalance.toFixed(2)} <span className="text-lg font-normal text-zinc-500 tracking-normal">USDT</span>
+          <div className="text-4xl font-black text-white tracking-tighter mb-2">
+            {profile?.availableBalance.toFixed(2)} <span className="text-sm font-normal text-zinc-500 tracking-normal">USDT</span>
           </div>
           <div className="flex gap-3 mt-8">
             <button onClick={() => setShowDepositModal(true)} className="flex-1 bg-orange-600 hover:bg-orange-700 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-xs transition-all shadow-lg shadow-orange-600/20">Deposit</button>
-            <button onClick={() => setShowWithdrawModal(true)} className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-xs transition-all">Withdraw</button>
+            <button 
+              onClick={() => {
+                setTransferDirection('available_to_seller');
+                setShowTransferModal(true);
+              }}
+              className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-xs transition-all"
+            >
+              Transfer
+            </button>
           </div>
         </div>
 
@@ -145,8 +223,8 @@ const Wallet: React.FC = () => {
             </div>
             <span className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em]">Escrow Balance</span>
           </div>
-          <div className="text-5xl font-black text-white tracking-tighter mb-2">
-            {profile?.escrowBalance.toFixed(2)} <span className="text-lg font-normal text-zinc-500 tracking-normal">USDT</span>
+          <div className="text-4xl font-black text-white tracking-tighter mb-2">
+            {profile?.escrowBalance.toFixed(2)} <span className="text-sm font-normal text-zinc-500 tracking-normal">USDT</span>
           </div>
           <p className="text-zinc-500 text-xs mt-4 font-medium">Funds currently held in active orders</p>
         </div>
@@ -157,13 +235,60 @@ const Wallet: React.FC = () => {
             <div className="h-12 w-12 bg-green-600/10 rounded-2xl flex items-center justify-center">
               <ArrowUpCircle className="h-6 w-6 text-green-500" />
             </div>
-            <span className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em]">Withdrawable</span>
+            <span className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em]">Seller Earnings</span>
           </div>
-          <div className="text-5xl font-black text-white tracking-tighter mb-2">
-            {profile?.withdrawableBalance.toFixed(2)} <span className="text-lg font-normal text-zinc-500 tracking-normal">USDT</span>
+          <div className="text-4xl font-black text-white tracking-tighter mb-2">
+            {profile?.withdrawableBalance.toFixed(2)} <span className="text-sm font-normal text-zinc-500 tracking-normal">USDT</span>
           </div>
-          <p className="text-zinc-500 text-xs mt-4 font-medium">Earnings ready for manual withdrawal</p>
+          <p className="text-zinc-500 text-xs mt-4 font-medium">Earnings from completed sales</p>
+          <div className="flex gap-3 mt-8">
+            <button 
+              onClick={() => {
+                setWithdrawType('seller');
+                setShowWithdrawModal(true);
+              }} 
+              className="flex-[2] bg-green-600 hover:bg-green-700 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-xs transition-all shadow-lg shadow-green-600/20"
+            >
+              Withdraw
+            </button>
+            <button 
+              onClick={() => {
+                setTransferDirection('seller_to_available');
+                setShowTransferModal(true);
+              }}
+              className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-xs transition-all"
+            >
+              Transfer
+            </button>
+          </div>
         </div>
+
+        {profile?.role === 'influencer' && (
+          <div className="bg-zinc-900 border border-zinc-800 p-8 rounded-[32px] relative overflow-hidden group transition-all hover:border-purple-600/50">
+            <div className="absolute top-0 right-0 w-48 h-48 bg-purple-600/5 blur-[80px] rounded-full -mr-12 -mt-12 group-hover:bg-purple-600/15 transition-all"></div>
+            <div className="flex items-center justify-between mb-6">
+              <div className="h-12 w-12 bg-purple-600/10 rounded-2xl flex items-center justify-center">
+                <ArrowUpCircle className="h-6 w-6 text-purple-500" />
+              </div>
+              <span className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em]">Influencer Earnings</span>
+            </div>
+            <div className="text-4xl font-black text-white tracking-tighter mb-2">
+              {(influencer ? influencer.totalEarnings - influencer.withdrawnBalance : 0).toFixed(2)} <span className="text-sm font-normal text-zinc-500 tracking-normal">USDT</span>
+            </div>
+            <p className="text-zinc-500 text-xs mt-4 font-medium">Commissions from referrals</p>
+            <div className="mt-8">
+              <button 
+                onClick={() => {
+                  setWithdrawType('influencer');
+                  setShowWithdrawModal(true);
+                }} 
+                className="w-full bg-purple-600 hover:bg-purple-700 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-xs transition-all shadow-lg shadow-purple-600/20"
+              >
+                Withdraw Earnings
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Transaction History */}
@@ -234,6 +359,87 @@ const Wallet: React.FC = () => {
           </table>
         </div>
       </div>
+
+      {/* Transfer Modal */}
+      {showTransferModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-[32px] w-full max-w-md p-8 shadow-2xl">
+            <div className="flex items-center justify-between mb-8">
+              <h2 className="text-2xl font-black text-white tracking-tight">Transfer Funds</h2>
+              <button onClick={() => setShowTransferModal(false)} className="text-zinc-500 hover:text-white transition-colors">
+                <AlertCircle className="h-6 w-6 rotate-45" />
+              </button>
+            </div>
+
+            <form onSubmit={handleTransfer} className="space-y-6">
+              <div className="bg-zinc-800/50 p-6 rounded-2xl border border-zinc-700/50">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="text-center flex-1">
+                    <div className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-1">From</div>
+                    <div className="text-white font-bold">
+                      {transferDirection === 'available_to_seller' ? 'Available Balance' : 'Seller Earnings'}
+                    </div>
+                  </div>
+                  <div className="px-4">
+                    <ArrowRightLeft className="h-5 w-5 text-orange-500" />
+                  </div>
+                  <div className="text-center flex-1">
+                    <div className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-1">To</div>
+                    <div className="text-white font-bold">
+                      {transferDirection === 'available_to_seller' ? 'Seller Earnings' : 'Available Balance'}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-black text-zinc-500 uppercase tracking-widest mb-2">Amount (USDT)</label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    step="0.01"
+                    required
+                    className="w-full bg-zinc-800 border border-zinc-700 rounded-2xl py-4 px-6 text-white font-bold focus:outline-none focus:border-orange-500 transition-all"
+                    placeholder="0.00"
+                    value={transferAmount}
+                    onChange={(e) => setTransferAmount(e.target.value)}
+                    max={transferDirection === 'available_to_seller' ? profile?.availableBalance : profile?.withdrawableBalance}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setTransferAmount((transferDirection === 'available_to_seller' ? profile?.availableBalance : profile?.withdrawableBalance)?.toString() || '0')}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-orange-500 text-xs font-bold hover:text-orange-400"
+                  >
+                    MAX
+                  </button>
+                </div>
+                <div className="flex justify-between mt-2">
+                  <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">Available</span>
+                  <span className="text-[10px] text-white font-bold uppercase tracking-widest">
+                    {transferDirection === 'available_to_seller' ? profile?.availableBalance.toFixed(2) : profile?.withdrawableBalance.toFixed(2)} USDT
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex gap-4 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setShowTransferModal(false)}
+                  className="flex-1 py-4 bg-zinc-800 hover:bg-zinc-700 text-white rounded-2xl font-black uppercase tracking-widest text-xs transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-4 bg-orange-600 hover:bg-orange-700 text-white rounded-2xl font-black uppercase tracking-widest text-xs transition-all shadow-lg shadow-orange-600/20"
+                >
+                  Confirm Transfer
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Deposit Modal */}
       {showDepositModal && (
@@ -352,12 +558,47 @@ const Wallet: React.FC = () => {
               <button onClick={() => setShowWithdrawModal(false)} className="text-zinc-500 hover:text-white">&times;</button>
             </div>
 
-            <div className="bg-zinc-800/50 rounded-2xl p-4 mb-8 flex items-center">
-              <AlertCircle className="h-5 w-5 text-blue-500 mr-3" />
-              <p className="text-xs text-zinc-400">Withdrawals are processed manually by admin within 24 hours.</p>
+            <div className="bg-zinc-800/50 rounded-2xl p-4 mb-8 space-y-3">
+              <div className="flex items-center">
+                <AlertCircle className="h-5 w-5 text-blue-500 mr-3 shrink-0" />
+                <p className="text-xs text-zinc-400">Withdrawals are processed within 24 hours.</p>
+              </div>
+              <div className="flex items-center pt-3 border-t border-zinc-700/50">
+                <Info className="h-5 w-5 text-orange-500 mr-3 shrink-0" />
+                <p className="text-xs text-zinc-400">Transaction charges may apply depending on withdrawal network.</p>
+              </div>
             </div>
 
             <form onSubmit={handleWithdraw} className="space-y-6">
+              {profile?.role === 'influencer' && (
+                <div>
+                  <label className="block text-sm font-medium text-zinc-400 mb-2">Withdraw From</label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setWithdrawType('seller')}
+                      className={`py-2 rounded-xl text-xs font-bold border transition-all ${
+                        withdrawType === 'seller'
+                          ? 'bg-orange-600 border-orange-600 text-white'
+                          : 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:border-zinc-600'
+                      }`}
+                    >
+                      Seller Earnings
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setWithdrawType('influencer')}
+                      className={`py-2 rounded-xl text-xs font-bold border transition-all ${
+                        withdrawType === 'influencer'
+                          ? 'bg-orange-600 border-orange-600 text-white'
+                          : 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:border-zinc-600'
+                      }`}
+                    >
+                      Influencer Earnings
+                    </button>
+                  </div>
+                </div>
+              )}
               <div>
                 <label className="block text-sm font-medium text-zinc-400 mb-2">Select Network</label>
                 <div className="grid grid-cols-3 gap-3">
@@ -383,14 +624,16 @@ const Wallet: React.FC = () => {
                   type="number"
                   required
                   step="0.01"
-                  max={profile?.availableBalance}
+                  max={withdrawType === 'seller' ? profile?.withdrawableBalance : (influencer ? influencer.totalEarnings - influencer.withdrawnBalance : 0)}
                   className="w-full bg-zinc-800 border border-zinc-700 rounded-xl py-3 px-4 text-white focus:outline-none focus:border-orange-500"
                   placeholder="0.00"
                   value={withdrawForm.amount}
                   onChange={e => setWithdrawForm({...withdrawForm, amount: e.target.value})}
                 />
                 <div className="text-right mt-1">
-                  <span className="text-[10px] text-zinc-500">Max: {profile?.availableBalance.toFixed(2)} USDT</span>
+                  <span className="text-[10px] text-zinc-500">
+                    Max: {(withdrawType === 'seller' ? profile?.withdrawableBalance : (influencer ? influencer.totalEarnings - influencer.withdrawnBalance : 0)).toFixed(2)} USDT
+                  </span>
                 </div>
               </div>
               <div>

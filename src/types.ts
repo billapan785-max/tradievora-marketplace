@@ -13,6 +13,7 @@ export interface UserProfile {
   trustScore: number; // 0-100
   referrerId?: string;
   referralChain?: string[]; // Up to 5 levels
+  image_url?: string;
   createdAt: string;
 }
 
@@ -109,6 +110,7 @@ export interface Listing {
   title: string;
   description: string;
   price: number;
+  image_url?: string;
   category: string;
   deliveryMethod: string;
   deliveryTime: string;
@@ -169,19 +171,25 @@ export interface Withdrawal {
 
 export interface Message {
   id: string;
-  orderId: string;
+  orderId?: string;
+  listingId?: string;
   senderId: string;
-  text: string;
+  text?: string;
+  type: 'text' | 'image' | 'video' | 'file';
+  url?: string;
   createdAt: string;
+  participants: string[];
 }
 
 export interface Review {
   id: string;
   orderId: string;
-  buyerId: string;
-  sellerId: string;
+  fromId: string;
+  toId: string;
+  fromName?: string;
   rating: number;
   comment: string;
+  type: 'buyer_to_seller' | 'seller_to_buyer';
   createdAt: string;
 }
 

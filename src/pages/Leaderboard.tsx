@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { InfluencerProfile } from '../types';
@@ -52,25 +53,25 @@ const Leaderboard: React.FC = () => {
           <div className="bg-zinc-900 border border-zinc-800 rounded-3xl overflow-hidden">
             {topEarners.map((inf, index) => (
               <div key={inf.uid} className={`flex items-center justify-between p-6 border-b border-zinc-800 last:border-0 transition-all hover:bg-zinc-800/30 ${index < 3 ? 'bg-orange-600/5' : ''}`}>
-                <div className="flex items-center space-x-6">
-                  <div className={`h-10 w-10 rounded-xl flex items-center justify-center font-black ${
-                    index === 0 ? 'bg-yellow-500 text-black' : 
-                    index === 1 ? 'bg-zinc-300 text-black' : 
-                    index === 2 ? 'bg-orange-500 text-black' : 'bg-zinc-800 text-zinc-500'
-                  }`}>
-                    {index + 1}
-                  </div>
-                  <div>
-                    <div className="text-white font-bold flex items-center">
-                      @{inf.username}
-                      {index < 3 && <Medal className={`h-4 w-4 ml-2 ${
-                        index === 0 ? 'text-yellow-500' : 
-                        index === 1 ? 'text-zinc-300' : 'text-orange-500'
-                      }`} />}
+                  <div className="flex items-center space-x-6">
+                    <div className={`h-10 w-10 rounded-xl flex items-center justify-center font-black ${
+                      index === 0 ? 'bg-yellow-500 text-black' : 
+                      index === 1 ? 'bg-zinc-300 text-black' : 
+                      index === 2 ? 'bg-orange-500 text-black' : 'bg-zinc-800 text-zinc-500'
+                    }`}>
+                      {index + 1}
                     </div>
-                    <div className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">{inf.rank} RANK</div>
+                    <div>
+                      <div className="text-white font-bold flex items-center">
+                        @{inf.username}
+                        {index < 3 && <Medal className={`h-4 w-4 ml-2 ${
+                          index === 0 ? 'text-yellow-500' : 
+                          index === 1 ? 'text-zinc-300' : 'text-orange-500'
+                        }`} />}
+                      </div>
+                      <div className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">{inf.rank} RANK</div>
+                    </div>
                   </div>
-                </div>
                 <div className="text-right">
                   <div className="text-xl font-black text-white">{inf.totalEarnings.toFixed(2)}</div>
                   <div className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">USDT EARNED</div>
@@ -95,19 +96,19 @@ const Leaderboard: React.FC = () => {
           <div className="bg-zinc-900 border border-zinc-800 rounded-3xl overflow-hidden">
             {topReferrers.map((inf, index) => (
               <div key={inf.uid} className={`flex items-center justify-between p-6 border-b border-zinc-800 last:border-0 transition-all hover:bg-zinc-800/30 ${index < 3 ? 'bg-blue-600/5' : ''}`}>
-                <div className="flex items-center space-x-6">
-                  <div className={`h-10 w-10 rounded-xl flex items-center justify-center font-black ${
-                    index === 0 ? 'bg-yellow-500 text-black' : 
-                    index === 1 ? 'bg-zinc-300 text-black' : 
-                    index === 2 ? 'bg-orange-500 text-black' : 'bg-zinc-800 text-zinc-500'
-                  }`}>
-                    {index + 1}
+                  <div className="flex items-center space-x-6">
+                    <div className={`h-10 w-10 rounded-xl flex items-center justify-center font-black ${
+                      index === 0 ? 'bg-yellow-500 text-black' : 
+                      index === 1 ? 'bg-zinc-300 text-black' : 
+                      index === 2 ? 'bg-orange-500 text-black' : 'bg-zinc-800 text-zinc-500'
+                    }`}>
+                      {index + 1}
+                    </div>
+                    <div>
+                      <div className="text-white font-bold">@{inf.username}</div>
+                      <div className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">{inf.totalReferrals} REFERRALS</div>
+                    </div>
                   </div>
-                  <div>
-                    <div className="text-white font-bold">@{inf.username}</div>
-                    <div className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">{inf.totalReferrals} REFERRALS</div>
-                  </div>
-                </div>
                 <div className="text-right">
                   <div className="text-xl font-black text-white">{inf.totalSales}</div>
                   <div className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">SALES GENERATED</div>

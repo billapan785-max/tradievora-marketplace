@@ -16,6 +16,8 @@ import HelpCenter from './pages/HelpCenter';
 import Terms from './pages/Terms';
 import Privacy from './pages/Privacy';
 import Disputes from './pages/Disputes';
+import Profile from './pages/Profile';
+import Reviews from './pages/Reviews';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import { Toaster } from 'sonner';
@@ -45,6 +47,8 @@ export default function App() {
               <Route path="/terms" element={<Terms />} />
               <Route path="/privacy" element={<Privacy />} />
               <Route path="/disputes" element={<Disputes />} />
+              <Route path="/profile/:uid" element={<Profile />} />
+              <Route path="/reviews" element={<Reviews />} />
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
               

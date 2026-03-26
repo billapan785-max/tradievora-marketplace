@@ -31,6 +31,8 @@ const InfluencerDashboard: React.FC = () => {
   const [settings, setSettings] = useState<PlatformSettings | null>(null);
   const [activeTab, setActiveTab] = useState<'overview' | 'referrals' | 'videos' | 'wallet'>('overview');
   const [showVideoModal, setShowVideoModal] = useState(false);
+  const [showWithdrawModal, setShowWithdrawModal] = useState(false);
+  const [modalInput, setModalInput] = useState('');
   const [newVideo, setNewVideo] = useState({
     url: '',
     title: '',
@@ -39,7 +41,7 @@ const InfluencerDashboard: React.FC = () => {
   });
 
   useEffect(() => {
-    if (!user || profile?.role !== 'influencer') return;
+    if (!user || (profile?.role !== 'influencer' && profile?.role !== 'admin')) return;
 
     // Fetch influencer profile
     const unsubInfluencer = onSnapshot(doc(db, 'influencers', user.uid), (docSnap) => {
@@ -133,17 +135,10 @@ const InfluencerDashboard: React.FC = () => {
     }
   };
 
-  const handleWithdraw = async () => {
+  const handleWithdraw = async (walletAddress: string) => {
     if (!user || !influencer) return;
     const available = influencer.totalEarnings - influencer.withdrawnBalance;
-    if (available < (settings?.minWithdrawal || 10)) {
-      toast.error(`Minimum withdrawal is ${settings?.minWithdrawal || 10} USDT`);
-      return;
-    }
-
-    const walletAddress = window.prompt('Enter your USDT (TRC20) Wallet Address:');
-    if (!walletAddress) return;
-
+    
     try {
       await addDoc(collection(db, 'withdrawals'), {
         userId: user.uid,
@@ -155,6 +150,8 @@ const InfluencerDashboard: React.FC = () => {
         createdAt: new Date().toISOString()
       });
       toast.success('Withdrawal request submitted!');
+      setShowWithdrawModal(false);
+      setModalInput('');
     } catch (error) {
       toast.error('Failed to submit withdrawal request');
     }
@@ -172,7 +169,7 @@ const InfluencerDashboard: React.FC = () => {
     );
   }
 
-  if (profile?.role !== 'influencer') {
+  if (profile?.role !== 'influencer' && profile?.role !== 'admin') {
     return (
       <div className="min-h-[60vh] flex flex-col items-center justify-center text-center p-8">
         <Award className="h-16 w-16 text-orange-500 mb-4" />
@@ -515,7 +512,14 @@ const InfluencerDashboard: React.FC = () => {
                 </div>
               </div>
               <button 
-                onClick={handleWithdraw}
+                onClick={() => {
+                  const available = influencer ? influencer.totalEarnings - influencer.withdrawnBalance : 0;
+                  if (available < (settings?.minWithdrawal || 10)) {
+                    toast.error(`Minimum withdrawal is ${settings?.minWithdrawal || 10} USDT`);
+                    return;
+                  }
+                  setShowWithdrawModal(true);
+                }}
                 className="w-full py-4 bg-orange-600 hover:bg-orange-700 text-white rounded-2xl font-black uppercase tracking-widest transition-all"
               >
                 Withdraw Earnings
@@ -622,6 +626,40 @@ const InfluencerDashboard: React.FC = () => {
                 className="flex-1 py-3 bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-bold transition-all"
               >
                 Submit Video
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Influencer Modals */}
+      {showWithdrawModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl w-full max-w-md p-8 shadow-2xl">
+            <h2 className="text-2xl font-bold text-white mb-4">Withdraw Funds</h2>
+            <p className="text-zinc-400 mb-4">Enter your USDT (TRC20) Wallet Address to receive your earnings:</p>
+            <input
+              type="text"
+              className="w-full bg-zinc-800 border border-zinc-700 rounded-xl py-3 px-4 text-white focus:outline-none focus:border-orange-500 mb-6"
+              placeholder="TRC20 Wallet Address"
+              value={modalInput}
+              onChange={(e) => setModalInput(e.target.value)}
+            />
+            <div className="flex gap-4">
+              <button
+                onClick={() => {
+                  setShowWithdrawModal(false);
+                  setModalInput('');
+                }}
+                className="flex-1 py-3 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl font-bold transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleWithdraw(modalInput)}
+                disabled={!modalInput}
+                className="flex-1 py-3 bg-orange-600 hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl font-bold transition-all"
+              >
+                Withdraw
               </button>
             </div>
           </div>

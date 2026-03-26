@@ -4,7 +4,7 @@ import { doc, getDoc, addDoc, collection, updateDoc, increment, query, where, on
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { Listing, UserProfile, Order, Review } from '../types';
 import { useAuth } from '../AuthContext';
-import { Shield, Clock, User, Star, CheckCircle, AlertCircle, ShoppingCart, BadgeCheck } from 'lucide-react';
+import { Shield, Clock, User, Star, CheckCircle, AlertCircle, ShoppingCart, BadgeCheck, MessageSquare } from 'lucide-react';
 import { toast } from 'sonner';
 
 const ListingDetail: React.FC = () => {
@@ -27,7 +27,11 @@ const ListingDetail: React.FC = () => {
         setListing({ id: docSnap.id, ...data });
         
         // Fetch reviews for the seller
-        const qReviews = query(collection(db, 'reviews'), where('sellerId', '==', data.sellerId));
+        const qReviews = query(
+          collection(db, 'reviews'), 
+          where('toId', '==', data.sellerId),
+          where('type', '==', 'buyer_to_seller')
+        );
         onSnapshot(qReviews, (snapshot) => {
           setReviews(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Review)));
         }, (error) => {
@@ -203,13 +207,21 @@ const ListingDetail: React.FC = () => {
               reviews.map(review => (
                 <div key={review.id} className="border-b border-zinc-800 pb-6 last:border-0">
                   <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center text-orange-500 text-xs font-bold">
-                      <Star className="h-3 w-3 fill-current mr-1" />
-                      {review.rating.toFixed(1)}
+                    <div className="flex items-center gap-3">
+                      <div className="h-8 w-8 bg-zinc-800 rounded-lg flex items-center justify-center text-xs font-bold text-orange-500">
+                        {review.fromName?.charAt(0) || 'U'}
+                      </div>
+                      <div>
+                        <div className="text-white text-sm font-bold">{review.fromName || 'User'}</div>
+                        <div className="flex items-center text-orange-500 text-[10px] font-bold">
+                          <Star className="h-2 w-2 fill-current mr-1" />
+                          {review.rating.toFixed(1)}
+                        </div>
+                      </div>
                     </div>
                     <div className="text-zinc-500 text-xs">{new Date(review.createdAt).toLocaleDateString()}</div>
                   </div>
-                  <p className="text-zinc-400 text-sm">{review.comment}</p>
+                  <p className="text-zinc-400 text-sm pl-11">{review.comment}</p>
                 </div>
               ))
             ) : (
@@ -277,6 +289,57 @@ const ListingDetail: React.FC = () => {
             </div>
           </div>
         </div>
+      </div>
+      {/* Reviews Section */}
+      <div className="mt-16">
+        <div className="flex items-center justify-between mb-8">
+          <h2 className="text-3xl font-bold text-white">Seller Reviews</h2>
+          <div className="flex items-center text-orange-500 font-bold">
+            <Star className="h-5 w-5 fill-current mr-2" />
+            {averageRating} ({reviews.length} Reviews)
+          </div>
+        </div>
+
+        {reviews.length > 0 ? (
+          <div className="grid md:grid-cols-2 gap-6">
+            {reviews.map((review) => (
+              <div key={review.id} className="bg-zinc-900 border border-zinc-800 p-6 rounded-3xl">
+                <div className="flex justify-between items-start mb-4">
+                  <div className="flex items-center">
+                    <div className="h-10 w-10 bg-zinc-800 rounded-xl flex items-center justify-center text-orange-500 font-bold">
+                      {review.fromName?.charAt(0) || 'U'}
+                    </div>
+                    <div className="ml-3">
+                      <div className="text-white font-bold text-sm">{review.fromName || 'Anonymous'}</div>
+                      <div className="flex items-center mt-0.5">
+                        {[...Array(5)].map((_, i) => (
+                          <Star
+                            key={i}
+                            className={`h-3 w-3 ${
+                              i < review.rating ? 'text-orange-500 fill-current' : 'text-zinc-700'
+                            }`}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-[10px] text-zinc-600 font-mono">
+                    {new Date(review.createdAt).toLocaleDateString()}
+                  </div>
+                </div>
+                <p className="text-zinc-400 text-sm italic leading-relaxed">
+                  "{review.comment}"
+                </p>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-12 bg-zinc-900/50 rounded-[3rem] border border-zinc-800 border-dashed">
+            <MessageSquare className="h-10 w-10 text-zinc-700 mx-auto mb-4" />
+            <h3 className="text-white font-bold">No reviews yet</h3>
+            <p className="text-zinc-500 text-sm mt-1">This seller hasn't received any feedback yet.</p>
+          </div>
+        )}
       </div>
     </div>
   );

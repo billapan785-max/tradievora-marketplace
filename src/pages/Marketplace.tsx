@@ -54,7 +54,7 @@ const Marketplace: React.FC = () => {
   }, [categoryFilter]);
 
   const getSellerRating = (sellerId: string) => {
-    const sellerReviews = reviews.filter(r => r.sellerId === sellerId);
+    const sellerReviews = reviews.filter(r => r.toId === sellerId && r.type === 'buyer_to_seller');
     if (sellerReviews.length === 0) return { rating: 0, count: 0 };
     const avg = sellerReviews.reduce((acc, r) => acc + r.rating, 0) / sellerReviews.length;
     return { rating: avg.toFixed(1), count: sellerReviews.length };

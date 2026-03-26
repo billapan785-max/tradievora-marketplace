@@ -106,18 +106,20 @@
       "required": ["orderId", "senderId", "text"]
     },
     "Review": {
-      "title": "Seller Review",
-      "description": "Buyer review for a completed order.",
+      "title": "User Review",
+      "description": "Feedback and rating between buyer and seller for a completed order.",
       "type": "object",
       "properties": {
         "orderId": { "type": "string" },
-        "buyerId": { "type": "string" },
-        "sellerId": { "type": "string" },
+        "fromId": { "type": "string" },
+        "toId": { "type": "string" },
+        "fromName": { "type": "string" },
         "rating": { "type": "number" },
         "comment": { "type": "string" },
+        "type": { "type": "string", "enum": ["buyer_to_seller", "seller_to_buyer"] },
         "createdAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["orderId", "buyerId", "sellerId", "rating"]
+      "required": ["orderId", "fromId", "toId", "rating", "type"]
     },
     "Settings": {
       "title": "Platform Settings",
@@ -181,7 +183,7 @@
     "/deposits/{depositId}": { "schema": "Deposit", "description": "Deposit requests" },
     "/withdrawals/{withdrawalId}": { "schema": "Withdrawal", "description": "Withdrawal requests" },
     "/messages/{messageId}": { "schema": "Message", "description": "Chat messages" },
-    "/reviews/{reviewId}": { "schema": "Review", "description": "Seller reviews" },
+    "/reviews/{reviewId}": { "schema": "Review", "description": "User reviews" },
     "/settings/platform": { "schema": "Settings", "description": "Global settings" },
     "/disputes/{disputeId}": { "schema": "Dispute", "description": "Order disputes" },
     "/evidence/{evidenceId}": { "schema": "Evidence", "description": "Dispute evidence" },

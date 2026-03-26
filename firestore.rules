@@ -36,7 +36,8 @@ service cloud.firestore {
     // Fields: orderId, senderId, text, createdAt
     //
     // Collection: reviews
-    // Fields: orderId, buyerId, sellerId, rating, comment, createdAt
+    // Fields: orderId, fromId, toId, fromName, rating, comment, type, createdAt
+    // Type: buyer_to_seller, seller_to_buyer
     //
     // Collection: settings
     // Fields: adminWalletTRC20, adminWalletERC20, marketplaceFeePercent, announcement, minWithdrawal, referralCommissionLevels, videoBonusStructure
@@ -86,6 +87,18 @@ service cloud.firestore {
       return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
     }
 
+    function isValidReview(data) {
+      return hasOnlyAllowedFields(['orderId', 'fromId', 'toId', 'fromName', 'rating', 'comment', 'type', 'createdAt']) &&
+             data.orderId is string &&
+             data.fromId is string &&
+             data.toId is string &&
+             (!('fromName' in data) || (data.fromName is string && data.fromName.size() < 100)) &&
+             data.rating is number && data.rating >= 1 && data.rating <= 5 &&
+             data.comment is string && data.comment.size() < 1000 &&
+             data.type in ['buyer_to_seller', 'seller_to_buyer'] &&
+             data.createdAt is string;
+    }
+
     // ===============================================================
     // Collection Rules
     // ===============================================================
@@ -104,7 +117,15 @@ service cloud.firestore {
          request.resource.data.isSuspended == resource.data.isSuspended &&
          (request.resource.data.availableBalance + request.resource.data.escrowBalance <= 
           resource.data.availableBalance + resource.data.escrowBalance) &&
-         request.resource.data.withdrawableBalance == resource.data.withdrawableBalance)
+         request.resource.data.withdrawableBalance == resource.data.withdrawableBalance) ||
+        (
+          // Allow balance updates during order completion/rejection/release/transfer
+          // This allows moving funds between available, escrow, and withdrawable buckets
+          request.resource.data.diff(resource.data).affectedKeys().hasAny(['availableBalance', 'escrowBalance', 'withdrawableBalance']) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['availableBalance', 'escrowBalance', 'withdrawableBalance']) &&
+          (request.resource.data.availableBalance + request.resource.data.escrowBalance + request.resource.data.withdrawableBalance == 
+           resource.data.availableBalance + resource.data.escrowBalance + resource.data.withdrawableBalance)
+        )
       );
     }
 
@@ -114,8 +135,8 @@ service cloud.firestore {
       allow update: if isAdmin() || 
                       (isAuthenticated() && request.auth.uid == influencerId) ||
                       (isAuthenticated() && 
-                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['totalReferrals']) &&
-                       request.resource.data.totalReferrals == resource.data.totalReferrals + 1);
+                       request.resource.data.diff(resource.data).affectedKeys().hasAny(['totalReferrals', 'totalEarnings', 'totalSales', 'totalVolume', 'levelEarnings']) &&
+                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['totalReferrals', 'totalEarnings', 'totalSales', 'totalVolume', 'levelEarnings', 'rank', 'pendingEarnings']));
     }
 
     match /referrals/{referralId} {
@@ -193,7 +214,13 @@ service cloud.firestore {
     match /reviews/{reviewId} {
       allow read: if true;
       allow create: if isAuthenticated() && !isSuspended() && 
-                      request.resource.data.buyerId == request.auth.uid;
+                      isValidReview(request.resource.data) &&
+                      reviewId == request.resource.data.orderId + "_" + request.resource.data.fromId &&
+                      request.resource.data.fromId == request.auth.uid &&
+                      exists(/databases/$(database)/documents/orders/$(request.resource.data.orderId)) &&
+                      (get(/databases/$(database)/documents/orders/$(request.resource.data.orderId)).data.buyerId == request.auth.uid ||
+                       get(/databases/$(database)/documents/orders/$(request.resource.data.orderId)).data.sellerId == request.auth.uid) &&
+                      get(/databases/$(database)/documents/orders/$(request.resource.data.orderId)).data.status == 'completed';
     }
 
     match /support_tickets/{ticketId} {
@@ -224,7 +251,12 @@ service cloud.firestore {
 
     match /timeline/{eventId} {
       allow read: if isAuthenticated() && (isAdmin() || (exists(/databases/$(database)/documents/orders/$(resource.data.orderId)) && (get(/databases/$(database)/documents/orders/$(resource.data.orderId)).data.buyerId == request.auth.uid || get(/databases/$(database)/documents/orders/$(resource.data.orderId)).data.sellerId == request.auth.uid)));
-      allow create: if isAdmin();
+      allow create: if isAuthenticated() && !isSuspended() && (
+        isAdmin() || 
+        (exists(/databases/$(database)/documents/orders/$(request.resource.data.orderId)) && 
+         (get(/databases/$(database)/documents/orders/$(request.resource.data.orderId)).data.buyerId == request.auth.uid || 
+          get(/databases/$(database)/documents/orders/$(request.resource.data.orderId)).data.sellerId == request.auth.uid))
+      );
     }
   }
 }

@@ -1,9 +1,13 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Shield, Zap, Lock, ArrowRight, Star, CheckCircle } from 'lucide-react';
+import { Shield, Zap, Lock, ArrowRight, Star, CheckCircle, MessageSquare } from 'lucide-react';
 import { motion } from 'motion/react';
+import { collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
+import { db } from '../lib/firebase';
+import { Review } from '../types';
 
 const Home: React.FC = () => {
+  const [recentReviews, setRecentReviews] = useState<Review[]>([]);
   const categories = [
     { name: 'eBay Accounts', icon: '📦', count: '150+' },
     { name: 'Walmart Accounts', icon: '🛒', count: '80+' },
@@ -12,6 +16,28 @@ const Home: React.FC = () => {
     { name: 'Facebook Accounts', icon: '👥', count: '200+' },
     { name: 'Payment Gateways', icon: '💳', count: '45+' },
   ];
+
+  useEffect(() => {
+    const fetchRecentReviews = async () => {
+      try {
+        const q = query(
+          collection(db, 'reviews'),
+          orderBy('createdAt', 'desc'),
+          limit(3)
+        );
+        const snapshot = await getDocs(q);
+        const fetchedReviews = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        })) as Review[];
+        setRecentReviews(fetchedReviews);
+      } catch (error) {
+        console.error('Error fetching recent reviews:', error);
+      }
+    };
+
+    fetchRecentReviews();
+  }, []);
 
   return (
     <div className="space-y-24">
@@ -121,6 +147,48 @@ const Home: React.FC = () => {
           </p>
         </div>
       </section>
+
+      {/* Recent Reviews Section */}
+      {recentReviews.length > 0 && (
+        <section>
+          <div className="flex justify-between items-end mb-12">
+            <div>
+              <h2 className="text-3xl font-bold text-white">Recent Feedback</h2>
+              <p className="text-zinc-400 mt-2">See what our community is saying</p>
+            </div>
+            <Link to="/reviews" className="text-orange-500 hover:text-orange-400 font-medium flex items-center">
+              View All Reviews <ArrowRight className="ml-1 h-4 w-4" />
+            </Link>
+          </div>
+          <div className="grid md:grid-cols-3 gap-6">
+            {recentReviews.map((review) => (
+              <div key={review.id} className="bg-zinc-900 border border-zinc-800 p-6 rounded-3xl">
+                <div className="flex items-center mb-4">
+                  <div className="h-10 w-10 bg-zinc-800 rounded-xl flex items-center justify-center text-orange-500 font-bold">
+                    {review.fromName?.charAt(0) || 'U'}
+                  </div>
+                  <div className="ml-3">
+                    <div className="text-white font-bold text-sm">{review.fromName || 'Anonymous'}</div>
+                    <div className="flex items-center mt-0.5">
+                      {[...Array(5)].map((_, i) => (
+                        <Star
+                          key={i}
+                          className={`h-3 w-3 ${
+                            i < review.rating ? 'text-orange-500 fill-current' : 'text-zinc-700'
+                          }`}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                <p className="text-zinc-400 text-sm italic leading-relaxed">
+                  "{review.comment.length > 120 ? review.comment.slice(0, 120) + '...' : review.comment}"
+                </p>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Influencer Program Section */}
       <section className="py-12">
