@@ -804,6 +804,42 @@ const AdminPanel: React.FC = () => {
                       </span>
                     </td>
                     <td className="px-6 py-4 text-right space-x-2">
+                      {o.status === 'pending_payment' && (
+                        <>
+                          <button 
+                            onClick={async () => {
+                              try {
+                                await updateDoc(doc(db, 'orders', o.id), { status: 'active', updatedAt: new Date().toISOString() });
+                                toast.success('Payment approved and order activated!');
+                              } catch (error) {
+                                toast.error('Failed to approve payment');
+                              }
+                            }} 
+                            className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded-lg"
+                          >
+                            Approve
+                          </button>
+                          <button 
+                            onClick={async () => {
+                              try {
+                                await updateDoc(doc(db, 'orders', o.id), { status: 'cancelled', updatedAt: new Date().toISOString() });
+                                // Refund buyer
+                                const buyerRef = doc(db, 'users', o.buyerId);
+                                await updateDoc(buyerRef, {
+                                  availableBalance: increment(o.amount),
+                                  escrowBalance: increment(-o.amount)
+                                });
+                                toast.success('Payment rejected and buyer refunded');
+                              } catch (error) {
+                                toast.error('Failed to reject payment');
+                              }
+                            }} 
+                            className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-lg"
+                          >
+                            Reject
+                          </button>
+                        </>
+                      )}
                       {o.status === 'disputed' && (
                         <>
                           <button onClick={() => handleResolveOrder(o.id, 'refund')} className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg">
