@@ -1,29 +1,30 @@
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { Readable } from "stream";
 
-const s3Client = new S3Client({
-  region: "auto",
-  endpoint: process.env.R2_ENDPOINT,
-  credentials: {
-    accessKeyId: process.env.R2_ACCESS_KEY_ID!,
-    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
-  },
-  forcePathStyle: true,
-});
-
-export const uploadFileToR2 = async (
+export const uploadToWorker = async (
   fileBuffer: Buffer | Readable,
   fileName: string,
   contentType: string
 ) => {
-  await s3Client.send(
-    new PutObjectCommand({
-      Bucket: process.env.R2_BUCKET_NAME,
-      Key: fileName,
-      Body: fileBuffer,
-      ContentType: contentType,
-    })
+  // Convert Buffer to Blob for native FormData
+  const blob = new Blob([fileBuffer as Buffer], { type: contentType });
+  
+  const formData = new FormData();
+  formData.append("file", blob, fileName);
+
+  const res = await fetch(
+    "https://fancy-tree-f711tradiora-upload.billapan785.workers.dev",
+    {
+      method: "POST",
+      body: formData,
+    }
   );
 
-  return `https://pub-1fc9e61e39754a6b92cf0e70a864cc89.r2.dev/${fileName}`;
+  if (!res.ok) {
+    const errorText = await res.text();
+    throw new Error(`Worker upload failed: ${res.statusText} - ${errorText}`);
+  }
+
+  const data = await res.json();
+
+  return data.url;
 };

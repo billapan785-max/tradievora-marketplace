@@ -64,6 +64,8 @@ const InfluencerDashboard: React.FC = () => {
         };
         setDoc(doc(db, 'influencers', user.uid), initialProfile);
       }
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, `influencers/${user.uid}`);
     });
 
     // Fetch referrals
@@ -71,6 +73,9 @@ const InfluencerDashboard: React.FC = () => {
       query(collection(db, 'referrals'), where('influencerId', '==', user.uid)),
       (snapshot) => {
         setReferrals(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Referral)));
+      },
+      (error) => {
+        handleFirestoreError(error, OperationType.LIST, 'referrals');
       }
     );
 
@@ -79,6 +84,9 @@ const InfluencerDashboard: React.FC = () => {
       query(collection(db, 'commissions'), where('influencerId', '==', user.uid)),
       (snapshot) => {
         setCommissions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Commission)));
+      },
+      (error) => {
+        handleFirestoreError(error, OperationType.LIST, 'commissions');
       }
     );
 
@@ -87,6 +95,9 @@ const InfluencerDashboard: React.FC = () => {
       query(collection(db, 'videos'), where('influencerId', '==', user.uid)),
       (snapshot) => {
         setVideos(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as VideoPromotion)));
+      },
+      (error) => {
+        handleFirestoreError(error, OperationType.LIST, 'videos');
       }
     );
 

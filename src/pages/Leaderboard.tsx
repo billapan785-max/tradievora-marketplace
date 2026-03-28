@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { InfluencerProfile } from '../types';
 import { Award, TrendingUp, Users, Eye, Trophy, Medal } from 'lucide-react';
 
@@ -16,10 +16,15 @@ const Leaderboard: React.FC = () => {
 
     const unsubEarners = onSnapshot(earnersQuery, (snapshot) => {
       setTopEarners(snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() } as InfluencerProfile)));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'influencers');
     });
 
     const unsubReferrers = onSnapshot(referrersQuery, (snapshot) => {
       setTopReferrers(snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() } as InfluencerProfile)));
+      setLoading(false);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'influencers');
       setLoading(false);
     });
 

@@ -3,6 +3,7 @@ import { onAuthStateChanged, User } from 'firebase/auth';
 import { doc, onSnapshot, setDoc, getDoc, updateDoc, increment } from 'firebase/firestore';
 import { auth, db, handleFirestoreError, OperationType } from './lib/firebase';
 import { UserProfile } from './types';
+import { requestNotificationPermission, setupForegroundListener } from './lib/notificationService';
 
 // ... (rest of the file)
 
@@ -40,8 +41,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setIsAuthReady(true);
 
       if (firebaseUser) {
+        // Request notification permission and setup foreground listener
+        requestNotificationPermission();
+        setupForegroundListener();
+
         // Listen to profile changes
         const profileRef = doc(db, 'users', firebaseUser.uid);
+        await updateDoc(profileRef, { lastSeen: new Date().toISOString() });
         
         unsubProfile = onSnapshot(profileRef, async (docSnap) => {
           if (docSnap.exists()) {
@@ -59,6 +65,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             
             setProfile(currentProfile);
             setLoading(false);
+
+            // Ensure public profile exists and is synced
+            const publicProfileRef = doc(db, 'profiles', firebaseUser.uid);
+            const publicProfileSnap = await getDoc(publicProfileRef);
+            if (!publicProfileSnap.exists()) {
+              await setDoc(publicProfileRef, {
+                uid: firebaseUser.uid,
+                displayName: currentProfile.displayName,
+                role: currentProfile.role,
+                isVerified: currentProfile.isVerified,
+                trustScore: currentProfile.trustScore || 100,
+                responseTime: currentProfile.responseTime || '1h',
+                image_url: currentProfile.image_url || '',
+                createdAt: currentProfile.createdAt
+              });
+            }
           } else {
             // Profile doesn't exist, create it
             const isAdminEmail = firebaseUser.email === 'megadigital000004@gmail.com';
@@ -89,12 +111,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               withdrawableBalance: 0,
               isSuspended: false,
               isVerified: false,
+              trustScore: 100,
+              responseTime: '1h',
+              image_url: firebaseUser.photoURL || '',
               referrerId: referrerId || null,
               referralChain: referralChain.length > 0 ? referralChain : [],
               createdAt: new Date().toISOString(),
             } as UserProfile;
             try {
               await setDoc(profileRef, newProfile);
+              
+              // Also create public profile
+              await setDoc(doc(db, 'profiles', firebaseUser.uid), {
+                uid: firebaseUser.uid,
+                displayName: newProfile.displayName,
+                role: newProfile.role,
+                isVerified: false,
+                trustScore: 100,
+                responseTime: '1h',
+                image_url: newProfile.image_url,
+                createdAt: newProfile.createdAt
+              });
               
               // If referred, create a referral record
               if (referrerId) {

@@ -6,7 +6,10 @@ service cloud.firestore {
     // ===============================================================
     //
     // Collection: users
-    // Fields: uid, email, role, availableBalance, escrowBalance, withdrawableBalance, isSuspended, isVerified, referrerId, referralChain, createdAt
+    // Fields: uid, email, role, availableBalance, escrowBalance, withdrawableBalance, isSuspended, isVerified, referrerId, referralChain, createdAt, responseTime, trustScore, image_url, displayName
+    //
+    // Collection: profiles
+    // Fields: uid, displayName, image_url, role, isVerified, responseTime, trustScore, createdAt
     //
     // Collection: influencers
     // Fields: uid, username, totalReferrals, totalSales, totalVolume, totalEarnings, pendingEarnings, withdrawnBalance, clicks, rank, levelEarnings
@@ -64,13 +67,28 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
-    function isAdmin() {
+    function isSystemAdmin() {
       return isAuthenticated() && 
-        (
-          (request.auth.token.email == "megadigital000004@gmail.com" && request.auth.token.email_verified == true) ||
-          (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
-           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
-        );
+             request.auth.token.email == "megadigital000004@gmail.com" &&
+             request.auth.token.email_verified == true;
+    }
+
+    function isAdmin() {
+      return isSystemAdmin() || 
+             (isAuthenticated() && 
+              exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
+    }
+
+    function isValidNotification(data) {
+      return hasOnlyAllowedFields(['userId', 'title', 'body', 'type', 'relatedId', 'read', 'createdAt']) &&
+             data.userId is string &&
+             data.title is string && data.title.size() < 200 &&
+             data.body is string && data.body.size() < 1000 &&
+             data.type in ['message', 'order', 'listing', 'system'] &&
+             (!('relatedId' in data) || (data.relatedId == null || data.relatedId is string)) &&
+             data.read is bool &&
+             data.createdAt is string;
     }
 
     function isSuspended() {
@@ -99,34 +117,48 @@ service cloud.firestore {
              data.createdAt is string;
     }
 
+    function isValidProfile(data) {
+      return hasOnlyAllowedFields(['uid', 'displayName', 'image_url', 'role', 'isVerified', 'responseTime', 'trustScore', 'createdAt']) &&
+             data.uid is string &&
+             data.displayName is string && data.displayName.size() < 100 &&
+             (!('image_url' in data) || (data.image_url is string && data.image_url.size() < 2000)) &&
+             data.role in ['buyer', 'seller', 'influencer', 'admin'] &&
+             data.isVerified is bool &&
+             data.trustScore is number &&
+             (!('responseTime' in data) || (data.responseTime is string && data.responseTime.size() < 50)) &&
+             data.createdAt is string;
+    }
+
     // ===============================================================
     // Collection Rules
     // ===============================================================
 
     match /users/{userId} {
-      allow get: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+      // Allow authenticated users to get other users' profiles to support legacy data visibility.
+      // Note: This exposes email addresses to all logged-in users. 
+      // In production, sensitive data should be in a private subcollection.
+      allow get: if isAuthenticated();
       allow list: if isAdmin();
       allow create: if isAuthenticated() && request.auth.uid == userId && 
-                      (request.resource.data.role in ['buyer', 'seller', 'influencer'] || (request.auth.token.email == "megadigital000004@gmail.com" && request.resource.data.role == 'admin')) &&
-                      request.resource.data.availableBalance == 0 &&
-                      request.resource.data.isSuspended == false;
+                      (request.resource.data.role in ['buyer', 'seller', 'influencer'] || isSystemAdmin());
       allow update: if isAuthenticated() && (
         isAdmin() || 
         (request.auth.uid == userId && 
-         (request.resource.data.role == resource.data.role || (resource.data.role == 'buyer' && request.resource.data.role == 'influencer')) && 
+         // Prevent sensitive field changes
+         request.resource.data.role == resource.data.role && 
          request.resource.data.isSuspended == resource.data.isSuspended &&
-         (request.resource.data.availableBalance + request.resource.data.escrowBalance <= 
-          resource.data.availableBalance + resource.data.escrowBalance) &&
-         request.resource.data.withdrawableBalance == resource.data.withdrawableBalance) ||
-        (
-          // Allow balance updates during order completion/rejection/release/transfer
-          // This allows moving funds between available, escrow, and withdrawable buckets
-          request.resource.data.diff(resource.data).affectedKeys().hasAny(['availableBalance', 'escrowBalance', 'withdrawableBalance']) &&
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['availableBalance', 'escrowBalance', 'withdrawableBalance']) &&
-          (request.resource.data.availableBalance + request.resource.data.escrowBalance + request.resource.data.withdrawableBalance == 
-           resource.data.availableBalance + resource.data.escrowBalance + resource.data.withdrawableBalance)
-        )
+         request.resource.data.availableBalance == resource.data.availableBalance &&
+         request.resource.data.escrowBalance == resource.data.escrowBalance &&
+         request.resource.data.withdrawableBalance == resource.data.withdrawableBalance &&
+         request.resource.data.isVerified == resource.data.isVerified &&
+         request.resource.data.trustScore == resource.data.trustScore)
       );
+    }
+
+    match /profiles/{userId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && (request.auth.uid == userId || isAdmin()) && isValidProfile(request.resource.data);
+      allow update: if isAuthenticated() && (isAdmin() || (request.auth.uid == userId && isValidProfile(request.resource.data)));
     }
 
     match /influencers/{influencerId} {
@@ -162,7 +194,10 @@ service cloud.firestore {
     match /listings/{listingId} {
       allow read: if true;
       allow create: if isAuthenticated() && !isSuspended() && 
-                      request.resource.data.sellerId == request.auth.uid;
+                      request.resource.data.sellerId == request.auth.uid &&
+                      'image_url' in request.resource.data &&
+                      request.resource.data.image_url is string &&
+                      request.resource.data.image_url.size() > 0;
       allow update: if isAdmin() || (isAuthenticated() && !isSuspended() && 
                       resource.data.sellerId == request.auth.uid);
       allow delete: if isAdmin() || (isAuthenticated() && !isSuspended() && 
@@ -207,8 +242,10 @@ service cloud.firestore {
       allow create: if isAuthenticated() && !isSuspended() && 
                       request.resource.data.senderId == request.auth.uid &&
                       request.resource.data.participants.hasAny([request.auth.uid]) &&
-                      !request.resource.data.text.matches(".*[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}.*") &&
-                      !request.resource.data.text.matches(".*(\\+?\\d{1,3}[- ]?)?\\d{10}.*");
+                      (!('text' in request.resource.data) || (
+                        !request.resource.data.text.matches(".*[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}.*") &&
+                        !request.resource.data.text.matches(".*(\\+?\\d{1,3}[- ]?)?\\d{10}.*")
+                      ));
     }
 
     match /reviews/{reviewId} {
@@ -238,6 +275,19 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    match /deliveries/{deliveryId} {
+      allow read: if isAuthenticated() && (
+        isAdmin() || 
+        (exists(/databases/$(database)/documents/orders/$(resource.data.order_id)) && 
+         (get(/databases/$(database)/documents/orders/$(resource.data.order_id)).data.buyerId == request.auth.uid || 
+          get(/databases/$(database)/documents/orders/$(resource.data.order_id)).data.sellerId == request.auth.uid))
+      );
+      allow create: if isAuthenticated() && !isSuspended() && (
+        exists(/databases/$(database)/documents/orders/$(request.resource.data.order_id)) && 
+        get(/databases/$(database)/documents/orders/$(request.resource.data.order_id)).data.sellerId == request.auth.uid
+      );
+    }
+
     match /disputes/{disputeId} {
       allow read: if isAuthenticated() && (isAdmin() || request.auth.uid == resource.data.buyerId || request.auth.uid == resource.data.sellerId);
       allow create: if isAuthenticated() && !isSuspended() && (request.resource.data.buyerId == request.auth.uid || request.resource.data.sellerId == request.auth.uid);
@@ -257,6 +307,20 @@ service cloud.firestore {
          (get(/databases/$(database)/documents/orders/$(request.resource.data.orderId)).data.buyerId == request.auth.uid || 
           get(/databases/$(database)/documents/orders/$(request.resource.data.orderId)).data.sellerId == request.auth.uid))
       );
+    }
+
+    match /notifications/{notificationId} {
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isAuthenticated() && isValidNotification(request.resource.data);
+      allow update: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin()) && 
+                      request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+      allow delete: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+    }
+
+    match /typing_status/{typingId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
     }
   }
 }

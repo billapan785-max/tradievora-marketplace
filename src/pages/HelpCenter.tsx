@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { collection, query, where, onSnapshot, addDoc, orderBy, doc, updateDoc, serverTimestamp, setDoc, getDoc } from 'firebase/firestore';
-import { db, auth } from '../lib/firebase';
+import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
 import { useAuth } from '../AuthContext';
 import { SupportTicket, SupportMessage } from '../types';
-import { Send, MessageSquare, Shield, Clock, User } from 'lucide-react';
+import { Send, MessageSquare, Shield, Clock, User, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
+import { useNavigate } from 'react-router-dom';
 
 const HelpCenter: React.FC = () => {
   const { user, profile } = useAuth();
@@ -14,6 +15,7 @@ const HelpCenter: React.FC = () => {
   const [ticket, setTicket] = useState<SupportTicket | null>(null);
   const [loading, setLoading] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (!user) {
@@ -41,6 +43,8 @@ const HelpCenter: React.FC = () => {
         };
         setDoc(doc(db, 'support_tickets', ticketId), initialTicket);
       }
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, `support_tickets/${ticketId}`);
     });
 
     // Fetch messages
@@ -58,6 +62,9 @@ const HelpCenter: React.FC = () => {
       if (ticket?.unreadByUser) {
         updateDoc(doc(db, 'support_tickets', ticketId), { unreadByUser: false });
       }
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'support_messages');
+      setLoading(false);
     });
 
     return () => {
@@ -129,10 +136,16 @@ const HelpCenter: React.FC = () => {
         </div>
       </div>
 
-      <div className="bg-zinc-900 border border-zinc-800 rounded-3xl overflow-hidden flex flex-col h-[600px]">
+      <div className="bg-zinc-900 border border-zinc-800 rounded-3xl overflow-hidden flex flex-col h-[calc(100vh-180px)] relative">
         {/* Chat Header */}
         <div className="p-4 border-b border-zinc-800 bg-zinc-900/50 flex items-center justify-between">
           <div className="flex items-center space-x-3">
+            <button 
+              onClick={() => navigate(-1)}
+              className="md:hidden p-2 bg-zinc-800 rounded-lg text-zinc-400 hover:text-white transition-colors"
+            >
+              <X className="h-5 w-5" />
+            </button>
             <div className="h-10 w-10 bg-zinc-800 rounded-xl flex items-center justify-center">
               <User className="h-5 w-5 text-zinc-400" />
             </div>
@@ -144,8 +157,16 @@ const HelpCenter: React.FC = () => {
               </div>
             </div>
           </div>
-          <div className="px-3 py-1 bg-zinc-800 rounded-lg">
-            <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Ticket #{user.uid.slice(-6)}</p>
+          <div className="flex items-center gap-4">
+            <div className="px-3 py-1 bg-zinc-800 rounded-lg">
+              <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Ticket #{user.uid.slice(-6)}</p>
+            </div>
+            <button 
+              onClick={() => navigate(-1)}
+              className="hidden md:flex p-2 bg-zinc-800 rounded-lg text-zinc-400 hover:text-white transition-colors"
+            >
+              <X className="h-5 w-5" />
+            </button>
           </div>
         </div>
 
@@ -183,18 +204,18 @@ const HelpCenter: React.FC = () => {
 
         {/* Input */}
         <form onSubmit={handleSendMessage} className="p-4 bg-zinc-900 border-t border-zinc-800">
-          <div className="flex space-x-4">
+          <div className="flex space-x-2 md:space-x-4">
             <input 
               type="text"
               placeholder="Type your message here..."
-              className="flex-1 bg-zinc-800 border border-zinc-700 rounded-xl py-3 px-4 text-white focus:outline-none focus:border-orange-500 transition-all"
+              className="flex-1 bg-zinc-800 border border-zinc-700 rounded-xl py-2 px-3 md:py-3 md:px-4 text-sm md:text-base text-white focus:outline-none focus:border-orange-500 transition-all"
               value={newMessage}
               onChange={(e) => setNewMessage(e.target.value)}
             />
             <button 
               type="submit"
               disabled={!newMessage.trim()}
-              className="px-6 bg-orange-600 hover:bg-orange-700 disabled:bg-zinc-800 text-white rounded-xl font-bold transition-all flex items-center"
+              className="px-4 md:px-6 bg-orange-600 hover:bg-orange-700 disabled:bg-zinc-800 text-white rounded-xl font-bold transition-all flex items-center justify-center"
             >
               <Send className="h-5 w-5" />
             </button>

@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { collection, query, where, onSnapshot, orderBy } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { Listing, Review } from '../types';
-import { Link, useSearchParams } from 'react-router-dom';
-import { Search, Filter, Tag, Clock, User, Star, BadgeCheck } from 'lucide-react';
+import { Link, useSearchParams, useNavigate } from 'react-router-dom';
+import { Search, Filter, Tag, Clock, User, Star, BadgeCheck, ChevronDown } from 'lucide-react';
 
 const Marketplace: React.FC = () => {
   const [listings, setListings] = useState<Listing[]>([]);
@@ -11,6 +11,8 @@ const Marketplace: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [searchTerm, setSearchTerm] = useState('');
   const [reviews, setReviews] = useState<Review[]>([]);
+  const [isCategoryMenuOpen, setIsCategoryMenuOpen] = useState(false);
+  const navigate = useNavigate();
   
   const categoryFilter = searchParams.get('cat') || 'All';
 
@@ -90,16 +92,31 @@ const Marketplace: React.FC = () => {
       <div className="flex flex-col lg:flex-row gap-8">
         {/* Sidebar Filters */}
         <aside className="w-full lg:w-64 space-y-6">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6">
-            <div className="flex items-center mb-4 text-white font-bold">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 lg:p-6">
+            <button 
+              onClick={() => setIsCategoryMenuOpen(!isCategoryMenuOpen)}
+              className="w-full flex items-center justify-between text-white font-bold lg:hidden"
+            >
+              <div className="flex items-center">
+                <Filter className="h-4 w-4 mr-2 text-orange-500" />
+                <span className="text-sm">{categoryFilter === 'All' ? 'All Categories' : categoryFilter}</span>
+              </div>
+              <ChevronDown className={`h-4 w-4 transition-transform ${isCategoryMenuOpen ? 'rotate-180' : ''}`} />
+            </button>
+
+            <div className="hidden lg:flex items-center mb-4 text-white font-bold">
               <Filter className="h-4 w-4 mr-2" />
               Categories
             </div>
-            <div className="space-y-2">
+
+            <div className={`mt-4 lg:mt-0 space-y-2 ${isCategoryMenuOpen ? 'block' : 'hidden lg:block'}`}>
               {categories.map(cat => (
                 <button
                   key={cat}
-                  onClick={() => setSearchParams(cat === 'All' ? {} : { cat })}
+                  onClick={() => {
+                    setSearchParams(cat === 'All' ? {} : { cat });
+                    setIsCategoryMenuOpen(false);
+                  }}
                   className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
                     categoryFilter === cat 
                       ? 'bg-orange-600 text-white font-semibold' 
@@ -133,70 +150,106 @@ const Marketplace: React.FC = () => {
         {/* Listings Grid */}
         <div className="flex-1">
           {loading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+            <div className="grid grid-cols-2 md:grid-cols-2 xl:grid-cols-3 gap-4 md:gap-6">
               {[1, 2, 3, 4, 5, 6].map(i => (
                 <div key={i} className="bg-zinc-900 h-80 rounded-2xl animate-pulse"></div>
               ))}
             </div>
           ) : filteredListings.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+            <div className="grid grid-cols-2 md:grid-cols-2 xl:grid-cols-3 gap-4 md:gap-6">
               {filteredListings.map(listing => (
-                <Link
+                <div
                   key={listing.id}
-                  to={`/listing/${listing.id}`}
-                  className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden hover:border-orange-500/50 transition-all group flex flex-col"
+                  onClick={() => navigate(`/listing/${listing.id}`)}
+                  className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden hover:border-orange-500/50 transition-all group flex flex-col cursor-pointer"
                 >
-                  <div className="p-6 flex-1 flex flex-col">
-                    <div className="flex justify-between items-start mb-4">
-                      <div className="flex gap-2">
-                        <span className="px-2 py-1 bg-zinc-800 text-zinc-400 text-[10px] font-bold uppercase rounded tracking-wider">
-                          {listing.category}
-                        </span>
+                  {listing.image_url && (
+                    <div className="w-full h-32 md:h-48 overflow-hidden bg-zinc-800 relative">
+                      <img 
+                        src={listing.image_url} 
+                        alt={listing.title} 
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                        referrerPolicy="no-referrer"
+                      />
+                      {/* Badges Overlay */}
+                      <div className="absolute top-2 left-2 flex flex-wrap gap-1">
                         {listing.isFeatured && (
-                          <span className="px-2 py-1 bg-orange-900/20 text-orange-500 text-[10px] font-bold uppercase rounded tracking-wider flex items-center">
-                            <Star className="h-3 w-3 mr-1 fill-current" />
+                          <span className="px-1.5 py-0.5 bg-orange-600 text-white text-[9px] font-bold uppercase rounded flex items-center shadow-sm">
+                            <Star className="h-2 w-2 mr-0.5 fill-current" />
                             Featured
                           </span>
                         )}
-                      </div>
-                      <div className="flex items-center text-orange-500 text-xs font-bold">
-                        <Star className="h-3 w-3 fill-current mr-1" />
-                        {Number(getSellerRating(listing.sellerId).rating) > 0 ? getSellerRating(listing.sellerId).rating : 'New'}
-                      </div>
-                    </div>
-                    <h3 className="text-white font-bold text-lg mb-2 group-hover:text-orange-500 transition-colors">
-                      {listing.title}
-                    </h3>
-                    <p className="text-zinc-400 text-sm line-clamp-2 mb-4 flex-1">
-                      {listing.description}
-                    </p>
-                    <div className="flex items-center text-zinc-500 text-xs space-x-4 mb-4">
-                      <div className="flex items-center">
-                        <Clock className="h-3 w-3 mr-1" />
-                        {listing.deliveryTime}
-                      </div>
-                      <div className="flex items-center">
-                        <User className="h-3 w-3 mr-1" />
-                        <span className="truncate max-w-[100px]">{listing.sellerName || 'Verified Seller'}</span>
-                        {listing.sellerIsVerified && (
-                          <BadgeCheck className="h-3 w-3 ml-1 text-blue-500 flex-shrink-0" />
+                        {listing.isFlashSale && listing.flashSaleEndsAt && new Date(listing.flashSaleEndsAt) > new Date() && (
+                          <span className="px-1.5 py-0.5 bg-red-600 text-white text-[9px] font-bold uppercase rounded flex items-center shadow-sm">
+                            <Clock className="h-2 w-2 mr-0.5" />
+                            Flash Sale
+                          </span>
                         )}
                       </div>
                     </div>
-                  </div>
-                  <div className="px-6 py-4 bg-zinc-800/50 border-t border-zinc-800 flex items-center justify-between">
-                    <div className="text-xl font-bold text-white">
-                      {listing.price} <span className="text-xs text-zinc-500 font-normal">USDT</span>
+                  )}
+                  <div className="p-3 md:p-6 flex-1 flex flex-col">
+                    <div className="flex justify-between items-start mb-1 md:mb-2">
+                       <span className="px-2 py-0.5 bg-zinc-800 text-zinc-400 text-[9px] font-bold uppercase rounded tracking-wider">
+                          {listing.category}
+                        </span>
+                      <div className="flex items-center text-orange-500 text-[9px] md:text-xs font-bold">
+                        <Star className="h-2 w-2 md:h-3 md:w-3 fill-current mr-0.5" />
+                        {Number(getSellerRating(listing.sellerId).rating) > 0 ? getSellerRating(listing.sellerId).rating : 'New'}
+                      </div>
                     </div>
-                    <span className="text-orange-500 font-bold text-sm group-hover:translate-x-1 transition-transform">
+                    <h3 className="text-white font-bold text-sm md:text-lg mb-0.5 md:mb-1 group-hover:text-orange-500 transition-colors truncate">
+                      {listing.title}
+                    </h3>
+                    <p className="text-zinc-400 text-xs md:text-sm line-clamp-2 mb-2 md:mb-4 flex-1">
+                      {listing.description}
+                    </p>
+                    <div className="flex items-center text-zinc-500 text-[10px] md:text-xs space-x-2 md:space-x-4 mb-2 md:mb-4">
+                      <div className="flex items-center">
+                        <Clock className="h-2 w-2 md:h-3 md:w-3 mr-1" />
+                        {listing.deliveryTime}
+                      </div>
+                    <div className="flex items-center">
+                      <User className="h-2 w-2 md:h-3 md:w-3 mr-1" />
+                      <Link 
+                        to={`/seller/${listing.sellerId}`}
+                        onClick={(e) => e.stopPropagation()}
+                        className="truncate max-w-[60px] md:max-w-[100px] hover:text-orange-500 transition-colors"
+                      >
+                        {listing.sellerName || 'Verified Seller'}
+                      </Link>
+                      {listing.sellerIsVerified && (
+                        <BadgeCheck className="h-2 w-2 md:h-3 md:w-3 ml-1 text-blue-500 flex-shrink-0" />
+                      )}
+                    </div>
+                    </div>
+                  </div>
+                  <div className="px-4 md:px-6 py-3 md:py-4 bg-zinc-800/50 border-t border-zinc-800 flex items-center justify-between">
+                    <div className="flex flex-col">
+                      <div className="text-lg md:text-xl font-bold text-white">
+                        {listing.isFlashSale && listing.flashSaleEndsAt && new Date(listing.flashSaleEndsAt) > new Date() && listing.discountedPrice ? (
+                          listing.discountedPrice
+                        ) : listing.discountedPrice ? (
+                          listing.discountedPrice
+                        ) : (
+                          listing.price
+                        )} <span className="text-xs text-zinc-500 font-normal">USDT</span>
+                      </div>
+                      {(listing.originalPrice || (listing.discountedPrice && listing.price)) && (
+                        <div className="text-[10px] md:text-xs text-zinc-500 line-through">
+                          {listing.originalPrice || listing.price} USDT
+                        </div>
+                      )}
+                    </div>
+                    <span className="text-orange-500 font-bold text-xs md:text-sm group-hover:translate-x-1 transition-transform">
                       Buy Now &rarr;
                     </span>
                   </div>
-                </Link>
+                </div>
               ))}
             </div>
           ) : (
-            <div className="text-center py-20 bg-zinc-900/50 rounded-3xl border border-dashed border-zinc-800">
+            <div className="text-center py-12 md:py-20 bg-zinc-900/50 rounded-3xl border border-dashed border-zinc-800">
               <Search className="h-12 w-12 text-zinc-700 mx-auto mb-4" />
               <h3 className="text-xl font-bold text-white mb-2">No listings found</h3>
               <p className="text-zinc-500">Try adjusting your search or filters</p>

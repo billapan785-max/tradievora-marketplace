@@ -43,7 +43,7 @@
         "vaMonthlyPrice": { "type": "number" },
         "vaSalesPercentage": { "type": "number" }
       },
-      "required": ["sellerId", "title", "price", "category", "serviceType"]
+      "required": ["sellerId", "title", "price", "category", "serviceType", "image_url"]
     },
     "Order": {
       "title": "Marketplace Order",
@@ -156,8 +156,9 @@
       "properties": {
         "disputeId": { "type": "string" },
         "userId": { "type": "string" },
-        "type": { "type": "string", "enum": ["screenshot", "login_proof", "video_proof", "transaction_proof", "refund_proof"] },
+        "type": { "type": "string", "enum": ["screenshot", "login_proof", "video_proof", "transaction_proof", "refund_proof", "appeal"] },
         "url": { "type": "string" },
+        "description": { "type": "string" },
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["disputeId", "userId", "type", "url"]

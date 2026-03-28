@@ -2,12 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Shield, Zap, Lock, ArrowRight, Star, CheckCircle, MessageSquare } from 'lucide-react';
 import { motion } from 'motion/react';
-import { collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
+import { collection, query, orderBy, limit, getDocs, doc, getDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import { Review } from '../types';
+import { Review, PlatformSettings } from '../types';
 
 const Home: React.FC = () => {
   const [recentReviews, setRecentReviews] = useState<Review[]>([]);
+  const [settings, setSettings] = useState<PlatformSettings | null>(null);
   const categories = [
     { name: 'eBay Accounts', icon: '📦', count: '150+' },
     { name: 'Walmart Accounts', icon: '🛒', count: '80+' },
@@ -36,7 +37,19 @@ const Home: React.FC = () => {
       }
     };
 
+    const fetchSettings = async () => {
+      try {
+        const settingsSnap = await getDoc(doc(db, 'settings', 'platform'));
+        if (settingsSnap.exists()) {
+          setSettings(settingsSnap.data() as PlatformSettings);
+        }
+      } catch (error) {
+        console.error('Error fetching settings:', error);
+      }
+    };
+
     fetchRecentReviews();
+    fetchSettings();
   }, []);
 
   return (
@@ -44,13 +57,16 @@ const Home: React.FC = () => {
       {/* Banner Section */}
       <section className="relative w-full h-64 md:h-80 rounded-[3rem] overflow-hidden mb-12 shadow-2xl flex items-center justify-center">
         <div className="absolute inset-0 bg-gradient-to-r from-orange-600 to-orange-900 z-0"></div>
-        <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1639762681485-074b7f4ec651?q=80&w=2070&auto=format&fit=crop')] bg-cover bg-center opacity-20 mix-blend-overlay z-0"></div>
+        <div 
+          className="absolute inset-0 bg-cover bg-center opacity-20 mix-blend-overlay z-0"
+          style={{ backgroundImage: `url(${settings?.bannerImageUrl || 'https://images.unsplash.com/photo-1639762681485-074b7f4ec651?q=80&w=2070&auto=format&fit=crop'})` }}
+        ></div>
         <div className="relative z-10 text-center px-4">
           <h1 className="text-5xl md:text-7xl font-black text-white tracking-tighter uppercase drop-shadow-lg">
-            Tradiora
+            {settings?.bannerTitle || 'Tradiora'}
           </h1>
           <p className="text-orange-100 text-lg md:text-xl mt-4 font-medium tracking-wide max-w-2xl mx-auto drop-shadow-md">
-            The Ultimate Digital Asset Trading Platform
+            {settings?.bannerSubtitle || 'The Ultimate Digital Asset Trading Platform'}
           </p>
         </div>
       </section>

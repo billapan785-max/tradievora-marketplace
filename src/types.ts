@@ -11,10 +11,24 @@ export interface UserProfile {
   isSuspended: boolean;
   isVerified: boolean;
   trustScore: number; // 0-100
+  responseTime?: string; // e.g. "2 hours"
   referrerId?: string;
   referralChain?: string[]; // Up to 5 levels
   image_url?: string;
   createdAt: string;
+  lastSeen?: string;
+}
+
+export interface PublicProfile {
+  uid: string;
+  displayName: string;
+  role: UserRole;
+  isVerified: boolean;
+  trustScore: number;
+  responseTime?: string;
+  image_url?: string;
+  createdAt: string;
+  lastSeen?: string;
 }
 
 // ... existing interfaces ...
@@ -36,8 +50,9 @@ export interface Evidence {
   id: string;
   disputeId: string;
   userId: string;
-  type: 'screenshot' | 'login_proof' | 'video_proof' | 'transaction_proof' | 'refund_proof';
+  type: 'screenshot' | 'login_proof' | 'video_proof' | 'transaction_proof' | 'refund_proof' | 'appeal';
   url: string;
+  description?: string;
   createdAt: string;
 }
 
@@ -110,6 +125,10 @@ export interface Listing {
   title: string;
   description: string;
   price: number;
+  originalPrice?: number;
+  discountedPrice?: number;
+  isFlashSale?: boolean;
+  flashSaleEndsAt?: string;
   image_url?: string;
   category: string;
   deliveryMethod: string;
@@ -175,10 +194,12 @@ export interface Message {
   listingId?: string;
   senderId: string;
   text?: string;
-  type: 'text' | 'image' | 'video' | 'file';
+  type: 'text' | 'image' | 'video' | 'file' | 'voice';
   url?: string;
+  audio?: string;
   createdAt: string;
   participants: string[];
+  status?: 'sent' | 'delivered' | 'seen';
 }
 
 export interface Review {
@@ -190,6 +211,17 @@ export interface Review {
   rating: number;
   comment: string;
   type: 'buyer_to_seller' | 'seller_to_buyer';
+  createdAt: string;
+}
+
+export interface Notification {
+  id: string;
+  userId: string;
+  title: string;
+  body: string;
+  type: 'message' | 'order' | 'listing' | 'system';
+  relatedId?: string;
+  read: boolean;
   createdAt: string;
 }
 
@@ -227,4 +259,7 @@ export interface PlatformSettings {
   videoBonusStructure: {
     [views: number]: number;
   };
+  bannerTitle?: string;
+  bannerSubtitle?: string;
+  bannerImageUrl?: string;
 }

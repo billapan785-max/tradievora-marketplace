@@ -6,6 +6,7 @@ import { Listing, UserProfile, Order, Review } from '../types';
 import { useAuth } from '../AuthContext';
 import { Shield, Clock, User, Star, CheckCircle, AlertCircle, ShoppingCart, BadgeCheck, MessageSquare } from 'lucide-react';
 import { toast } from 'sonner';
+import { sendNotification } from '../lib/notificationService';
 
 const ListingDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -26,6 +27,46 @@ const ListingDetail: React.FC = () => {
         const data = docSnap.data() as Listing;
         setListing({ id: docSnap.id, ...data });
         
+        // Fetch seller profile
+        try {
+          const sellerDoc = await getDoc(doc(db, 'profiles', data.sellerId));
+          if (sellerDoc.exists()) {
+            setSeller({ uid: sellerDoc.id, ...sellerDoc.data() } as UserProfile);
+          } else {
+            // Fallback to users (only works if authenticated)
+            try {
+              const userDoc = await getDoc(doc(db, 'users', data.sellerId));
+              if (userDoc.exists()) {
+                const userData = userDoc.data() as UserProfile;
+                setSeller({ uid: userDoc.id, ...userData } as UserProfile);
+
+                // If viewer is admin, migrate this old profile to the public profiles collection
+                if (profile?.role === 'admin') {
+                  try {
+                    const { setDoc } = await import('firebase/firestore');
+                    await setDoc(doc(db, 'profiles', data.sellerId), {
+                      uid: data.sellerId,
+                      displayName: userData.displayName || 'User',
+                      role: userData.role || 'seller',
+                      isVerified: userData.isVerified || false,
+                      trustScore: userData.trustScore || 100,
+                      responseTime: userData.responseTime || '1h',
+                      image_url: userData.image_url || '',
+                      createdAt: userData.createdAt || new Date().toISOString()
+                    });
+                  } catch (migrateErr) {
+                    console.error("Failed to migrate profile from ListingDetail:", migrateErr);
+                  }
+                }
+              }
+            } catch (err) {
+              console.log("Could not fetch seller from users (guest or no permission)");
+            }
+          }
+        } catch (err) {
+          console.error("Error fetching seller profile:", err);
+        }
+
         // Fetch reviews for the seller
         const qReviews = query(
           collection(db, 'reviews'), 
@@ -55,12 +96,19 @@ const ListingDetail: React.FC = () => {
 
     if (!listing) return;
 
-    let orderAmount = listing.price;
+    let currentPrice = listing.price;
+    if (listing.isFlashSale && listing.flashSaleEndsAt && new Date(listing.flashSaleEndsAt) > new Date() && listing.discountedPrice) {
+      currentPrice = listing.discountedPrice;
+    } else if (listing.discountedPrice) {
+      currentPrice = listing.discountedPrice;
+    }
+
+    let orderAmount = currentPrice;
     let orderType: Order['orderType'] = 'fixed';
 
     if (listing.serviceType === 'percentage' || listing.serviceType === 'refund_percentage') {
       // For percentage based, the buyer pays the deposit
-      orderAmount = (listing.price * (listing.percentageRate || 0)) / 100;
+      orderAmount = (currentPrice * (listing.percentageRate || 0)) / 100;
       orderType = listing.serviceType === 'refund_percentage' ? 'percentage_refund' : 'percentage_work';
     } else if (listing.serviceType === 'security_deposit') {
       orderAmount = listing.securityDepositAmount || 0;
@@ -100,6 +148,14 @@ const ListingDetail: React.FC = () => {
 
       const orderRef = await addDoc(collection(db, 'orders'), orderData);
 
+      // Notify seller about new order
+      sendNotification({
+        toId: listing.sellerId,
+        title: 'New Order Placed!',
+        body: `You have a new order for: ${listing.title}`,
+        data: { type: 'order', id: orderRef.id }
+      });
+
       // 2. Update Buyer Balances
       const buyerRef = doc(db, 'users', profile.uid);
       await updateDoc(buyerRef, {
@@ -136,6 +192,16 @@ const ListingDetail: React.FC = () => {
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
       {/* Left Column: Details */}
       <div className="lg:col-span-2 space-y-8">
+        {listing.image_url && (
+          <div className="w-full h-[400px] rounded-3xl overflow-hidden bg-zinc-900 border border-zinc-800">
+            <img 
+              src={listing.image_url} 
+              alt={listing.title} 
+              className="w-full h-full object-cover"
+              referrerPolicy="no-referrer"
+            />
+          </div>
+        )}
         <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-8">
           <div className="flex items-center space-x-2 mb-6">
             <span className="px-3 py-1 bg-orange-600/20 text-orange-500 text-xs font-bold uppercase rounded-full tracking-wider">
@@ -148,10 +214,40 @@ const ListingDetail: React.FC = () => {
           
           <h1 className="text-4xl font-extrabold text-white mb-6">{listing.title}</h1>
           
+          {listing.isFlashSale && listing.flashSaleEndsAt && new Date(listing.flashSaleEndsAt) > new Date() && (
+            <div className="mb-8 p-6 bg-red-900/10 border border-red-500/20 rounded-3xl flex items-center justify-between">
+              <div className="flex items-center text-red-500 font-bold">
+                <Clock className="h-6 w-6 mr-3" />
+                <div>
+                  <div className="text-lg uppercase tracking-wider">Flash Sale Active!</div>
+                  <div className="text-sm opacity-80">Ends at {new Date(listing.flashSaleEndsAt).toLocaleString()}</div>
+                </div>
+              </div>
+              <div className="text-right">
+                <div className="text-2xl font-black text-red-500">
+                  {Math.round(((listing.originalPrice || listing.price) - (listing.discountedPrice || 0)) / (listing.originalPrice || listing.price) * 100)}% OFF
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-6 mb-8">
             <div className="bg-zinc-800/50 p-4 rounded-2xl border border-zinc-800">
               <div className="text-zinc-500 text-xs mb-1 uppercase font-bold tracking-tighter">Price</div>
-              <div className="text-2xl font-bold text-white">{listing.price} <span className="text-sm font-normal text-zinc-500">USDT</span></div>
+              <div className="text-2xl font-bold text-white">
+                {listing.isFlashSale && listing.flashSaleEndsAt && new Date(listing.flashSaleEndsAt) > new Date() && listing.discountedPrice ? (
+                  listing.discountedPrice
+                ) : listing.discountedPrice ? (
+                  listing.discountedPrice
+                ) : (
+                  listing.price
+                )} <span className="text-sm font-normal text-zinc-500">USDT</span>
+              </div>
+              {(listing.originalPrice || (listing.discountedPrice && listing.price)) && (
+                <div className="text-xs text-zinc-500 line-through">
+                  {listing.originalPrice || listing.price} USDT
+                </div>
+              )}
             </div>
             {listing.serviceType === 'percentage' && (
               <div className="bg-zinc-800/50 p-4 rounded-2xl border border-zinc-800">
@@ -198,75 +294,51 @@ const ListingDetail: React.FC = () => {
             </p>
           </div>
         </div>
-
-        {/* Reviews Section */}
-        <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-8">
-          <h3 className="text-xl font-bold text-white mb-6">Recent Reviews</h3>
-          <div className="space-y-6">
-            {reviews.length > 0 ? (
-              reviews.map(review => (
-                <div key={review.id} className="border-b border-zinc-800 pb-6 last:border-0">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-3">
-                      <div className="h-8 w-8 bg-zinc-800 rounded-lg flex items-center justify-center text-xs font-bold text-orange-500">
-                        {review.fromName?.charAt(0) || 'U'}
-                      </div>
-                      <div>
-                        <div className="text-white text-sm font-bold">{review.fromName || 'User'}</div>
-                        <div className="flex items-center text-orange-500 text-[10px] font-bold">
-                          <Star className="h-2 w-2 fill-current mr-1" />
-                          {review.rating.toFixed(1)}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="text-zinc-500 text-xs">{new Date(review.createdAt).toLocaleDateString()}</div>
-                  </div>
-                  <p className="text-zinc-400 text-sm pl-11">{review.comment}</p>
-                </div>
-              ))
-            ) : (
-              <div className="text-center py-10 text-zinc-600">
-                No reviews yet for this seller.
-              </div>
-            )}
-          </div>
-        </div>
       </div>
 
       {/* Right Column: Seller & Action */}
       <div className="space-y-8">
         <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-8 sticky top-24">
-          <div className="flex items-center mb-8">
-            <div className="h-16 w-16 bg-zinc-800 rounded-2xl flex items-center justify-center text-2xl font-bold text-orange-500">
-              {listing.sellerName?.charAt(0) || 'S'}
-            </div>
+          <Link to={`/seller/${listing.sellerId}`} className="flex items-center mb-8 hover:opacity-80 transition-opacity group">
+            {seller?.image_url ? (
+              <img 
+                src={seller.image_url} 
+                alt={seller.displayName} 
+                className="h-16 w-16 rounded-2xl object-cover group-hover:border-orange-500/50 border border-transparent transition-all"
+                referrerPolicy="no-referrer"
+              />
+            ) : (
+              <div className="h-16 w-16 bg-zinc-800 rounded-2xl flex items-center justify-center text-2xl font-bold text-orange-500 group-hover:border-orange-500/50 border border-transparent transition-all">
+                {(seller?.displayName || listing.sellerName)?.charAt(0) || 'S'}
+              </div>
+            )}
             <div className="ml-4">
               <div className="flex items-center">
-                <h3 className="text-white font-bold">{listing.sellerName || 'Seller'}</h3>
-                {listing.sellerIsVerified && (
+                <h3 className="text-white font-bold group-hover:text-orange-500 transition-colors">{seller?.displayName || listing.sellerName || 'Seller'}</h3>
+                {(seller?.isVerified || listing.sellerIsVerified) && (
                   <BadgeCheck className="h-4 w-4 ml-1 text-blue-500" />
                 )}
               </div>
-              <p className="text-zinc-500 text-xs">Joined Recently</p>
+              <p className="text-zinc-500 text-xs">Trust Score: {seller?.trustScore || 100}%</p>
               <div className="flex items-center mt-1 text-orange-500 text-xs font-bold">
                 <Star className="h-3 w-3 fill-current mr-1" />
                 {averageRating} ({reviews.length} Reviews)
               </div>
             </div>
-          </div>
+          </Link>
 
           <div className="space-y-4">
             <button
               onClick={handleBuy}
               disabled={buying}
-              className="w-full py-4 bg-orange-600 hover:bg-orange-700 disabled:bg-zinc-700 text-white rounded-2xl font-bold text-lg flex items-center justify-center transition-all shadow-lg shadow-orange-900/20"
+              className="w-full py-3 md:py-4 bg-orange-600 hover:bg-orange-700 disabled:bg-zinc-700 text-white rounded-2xl font-bold text-base md:text-lg flex items-center justify-center transition-all shadow-lg shadow-orange-900/20"
             >
               <ShoppingCart className="h-5 w-5 mr-2" />
               {buying ? 'Processing...' : 'Buy Now'}
             </button>
             <button
               onClick={handleContactSeller}
-              className="w-full py-4 bg-zinc-800 hover:bg-zinc-700 text-white rounded-2xl font-bold transition-all"
+              className="w-full py-3 md:py-4 bg-zinc-800 hover:bg-zinc-700 text-white rounded-2xl font-bold text-base md:text-lg transition-all"
             >
               Contact Seller
             </button>

@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { collection, query, where, onSnapshot, doc, updateDoc, increment, getDoc, setDoc, addDoc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, doc, updateDoc, increment, getDoc, getDocs, setDoc, addDoc } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { useAuth } from '../AuthContext';
-import { Order, Dispute } from '../types';
+import { Order, Dispute, Review } from '../types';
 import { Package, Clock, CheckCircle, AlertCircle, MessageSquare, Shield, ArrowRight, Star } from 'lucide-react';
 import { toast } from 'sonner';
-import { Review } from '../types';
 import { uploadFile } from '../lib/upload';
+import { sendNotification } from '../lib/notificationService';
 
 const Orders: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -19,6 +19,8 @@ const Orders: React.FC = () => {
   const [showCompleteModal, setShowCompleteModal] = useState<Order | null>(null);
   const [showDisputeModal, setShowDisputeModal] = useState<Order | null>(null);
   const [disputeFile, setDisputeFile] = useState<File | null>(null);
+  const [showAppealModal, setShowAppealModal] = useState<Order | null>(null);
+  const [appealFile, setAppealFile] = useState<File | null>(null);
   const [showDeliverModal, setShowDeliverModal] = useState<string | null>(null);
   const [deliveryFile, setDeliveryFile] = useState<File | null>(null);
   const [showReviewModal, setShowReviewModal] = useState<Order | null>(null);
@@ -39,11 +41,14 @@ const Orders: React.FC = () => {
         reviewsMap[data.orderId] = true;
       });
       setUserReviews(reviewsMap);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'reviews');
     });
 
     const qBuying = query(collection(db, 'orders'), where('buyerId', '==', profile.uid));
     const unsubBuying = onSnapshot(qBuying, (snapshot) => {
-      const orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order));
+      const orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order))
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
       setBuyingOrders(orders);
       
       // If we're looking for a specific order and it's in buying, make sure tab is correct
@@ -56,7 +61,8 @@ const Orders: React.FC = () => {
 
     const qSelling = query(collection(db, 'orders'), where('sellerId', '==', profile.uid));
     const unsubSelling = onSnapshot(qSelling, (snapshot) => {
-      const orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order));
+      const orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order))
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
       setSellingOrders(orders);
       setLoading(false);
 
@@ -100,6 +106,15 @@ const Orders: React.FC = () => {
 
       // 3. Distribute Commissions
       const buyerSnap = await getDoc(buyerRef);
+      
+      // Notify seller that order is completed
+      sendNotification({
+        toId: order.sellerId,
+        title: 'Order Completed!',
+        body: `Buyer confirmed delivery for: ${order.listingTitle}. Funds released.`,
+        data: { type: 'order', id: order.id }
+      });
+
       if (buyerSnap.exists()) {
         const buyerProfile = buyerSnap.data();
         const referralChain = buyerProfile.referralChain || [];
@@ -148,6 +163,60 @@ const Orders: React.FC = () => {
     }
   };
 
+  const isWithin24Hours = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diff = now.getTime() - date.getTime();
+    return diff <= 24 * 60 * 60 * 1000;
+  };
+
+  const handleAppealDispute = async (order: Order, reason: string, file: File | null) => {
+    try {
+      const qDispute = query(
+        collection(db, 'disputes'), 
+        where('orderId', '==', order.id),
+        where(profile?.uid === order.buyerId ? 'buyerId' : 'sellerId', '==', profile?.uid)
+      );
+      const disputeSnap = await getDocs(qDispute);
+      if (disputeSnap.empty) {
+        toast.error('Dispute not found');
+        return;
+      }
+      const disputeId = disputeSnap.docs[0].id;
+
+      let proofUrl = '';
+      if (file) {
+        proofUrl = await uploadFile(file, 'disputes/proofs', profile?.uid || 'unknown');
+      }
+
+      await addDoc(collection(db, 'evidence'), {
+        disputeId: disputeId,
+        userId: profile?.uid,
+        type: 'appeal',
+        url: proofUrl,
+        description: reason,
+        createdAt: new Date().toISOString()
+      });
+
+      await addDoc(collection(db, 'timeline'), {
+        orderId: order.id,
+        type: 'appeal_submitted',
+        description: `Appeal evidence submitted by ${profile?.uid === order.buyerId ? 'Buyer' : 'Seller'}: ${reason}`,
+        userId: profile?.uid,
+        createdAt: new Date().toISOString(),
+      });
+
+      toast.success('Appeal submitted successfully.');
+      setShowAppealModal(null);
+      setModalInput('');
+      setAppealFile(null);
+    } catch (error) {
+      console.error('Error submitting appeal:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to submit appeal');
+      handleFirestoreError(error, OperationType.WRITE, 'evidence');
+    }
+  };
+
   const handleOpenDispute = async (order: Order, reason: string, file: File | null) => {
     try {
       let proofUrl = '';
@@ -176,11 +245,23 @@ const Orders: React.FC = () => {
         userId: profile?.uid,
         createdAt: new Date().toISOString(),
       });
+
+      // Notify the other party
+      const otherPartyId = profile?.uid === order.buyerId ? order.sellerId : order.buyerId;
+      sendNotification({
+        toId: otherPartyId,
+        title: 'Dispute Opened',
+        body: `A dispute has been opened for your order: ${order.listingTitle}`,
+        data: { type: 'order', id: order.id }
+      });
+
       toast.success('Dispute opened successfully.');
       setShowDisputeModal(null);
       setModalInput('');
       setDisputeFile(null);
     } catch (error) {
+      console.error('Error opening dispute:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to open dispute');
       handleFirestoreError(error, OperationType.WRITE, 'disputes/timeline');
     }
   };
@@ -210,6 +291,19 @@ const Orders: React.FC = () => {
         userId: profile?.uid,
         createdAt: new Date().toISOString()
       });
+
+      // Notify buyer that order is delivered
+      const orderSnap = await getDoc(doc(db, 'orders', orderId));
+      if (orderSnap.exists()) {
+        const orderData = orderSnap.data() as Order;
+        sendNotification({
+          toId: orderData.buyerId,
+          title: 'Order Delivered!',
+          body: `Seller has submitted delivery details for: ${orderData.listingTitle}`,
+          data: { type: 'order', id: orderId }
+        });
+      }
+
       toast.success('Delivery submitted successfully!');
       setShowDeliverModal(null);
       setModalInput('');
@@ -242,6 +336,17 @@ const Orders: React.FC = () => {
 
       console.log('Submitting review:', reviewData);
       await setDoc(doc(db, 'reviews', reviewId), reviewData);
+
+      // Notify seller if buyer left a review
+      if (activeTab === 'buying') {
+        sendNotification({
+          toId: order.sellerId,
+          title: 'New Review Received!',
+          body: `A buyer left a ${reviewRating}-star review for: ${order.listingTitle}`,
+          data: { type: 'order', id: order.id }
+        });
+      }
+
       toast.success('Review submitted successfully!');
       setShowReviewModal(null);
       setReviewRating(5);
@@ -338,9 +443,12 @@ const Orders: React.FC = () => {
                       {new Date(order.createdAt).toLocaleDateString()}
                     </div>
                     <div className="font-bold text-white">{order.amount} USDT</div>
-                    <div className="text-orange-500 text-xs font-bold">
+                    <Link 
+                      to={activeTab === 'buying' ? `/seller/${order.sellerId}` : `/profile/${order.buyerId}`}
+                      className="text-orange-500 text-xs font-bold hover:underline"
+                    >
                       View {activeTab === 'buying' ? 'Seller' : 'Buyer'}
-                    </div>
+                    </Link>
                   </div>
                 </div>
 
@@ -361,12 +469,29 @@ const Orders: React.FC = () => {
                       Open Dispute
                     </button>
                   )}
+                  {order.status === 'disputed' && isWithin24Hours(order.updatedAt) && (
+                    <button
+                      onClick={() => setShowAppealModal(order)}
+                      className="w-full bg-orange-600 hover:bg-orange-700 text-white py-2 rounded-xl text-sm font-bold transition-all"
+                    >
+                      Appeal Dispute
+                    </button>
+                  )}
                   {activeTab === 'selling' && order.status === 'pending_seller_approval' && (
                     <div className="flex gap-2 w-full">
                       <button
                         onClick={async () => {
                           try {
                             await updateDoc(doc(db, 'orders', order.id), { status: 'active', updatedAt: new Date().toISOString() });
+                            
+                            // Notify buyer that order is accepted
+                            sendNotification({
+                              toId: order.buyerId,
+                              title: 'Order Accepted!',
+                              body: `Seller accepted your order for: ${order.listingTitle}`,
+                              data: { type: 'order', id: order.id }
+                            });
+
                             toast.success('Order accepted!');
                           } catch (error) {
                             toast.error('Failed to accept order');
@@ -386,6 +511,15 @@ const Orders: React.FC = () => {
                               availableBalance: increment(order.amount),
                               escrowBalance: increment(-order.amount)
                             });
+
+                            // Notify buyer about rejection
+                            sendNotification({
+                              toId: order.buyerId,
+                              title: 'Order Rejected',
+                              body: `Seller has rejected your order for: ${order.listingTitle}. Funds have been refunded.`,
+                              data: { type: 'order', id: order.id }
+                            });
+
                             toast.success('Order rejected and buyer refunded');
                           } catch (error) {
                             toast.error('Failed to reject order');
@@ -461,6 +595,45 @@ const Orders: React.FC = () => {
                 className="flex-1 py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold transition-all"
               >
                 Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showAppealModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl w-full max-w-md p-8 shadow-2xl">
+            <h2 className="text-2xl font-bold text-white mb-4">Appeal Dispute</h2>
+            <p className="text-zinc-400 mb-4">Please enter your appeal reason and attach evidence:</p>
+            <textarea
+              className="w-full bg-zinc-800 border border-zinc-700 rounded-xl py-3 px-4 text-white focus:outline-none focus:border-orange-500 mb-4"
+              rows={4}
+              placeholder="Explain your side..."
+              value={modalInput}
+              onChange={(e) => setModalInput(e.target.value)}
+            />
+            <input
+              type="file"
+              onChange={(e) => setAppealFile(e.target.files?.[0] || null)}
+              className="w-full bg-zinc-800 border border-zinc-700 rounded-xl py-3 px-4 text-white focus:outline-none focus:border-orange-500 mb-6"
+            />
+            <div className="flex gap-4">
+              <button
+                onClick={() => {
+                  setShowAppealModal(null);
+                  setModalInput('');
+                  setAppealFile(null);
+                }}
+                className="flex-1 py-3 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl font-bold transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleAppealDispute(showAppealModal, modalInput || 'No reason provided', appealFile)}
+                className="flex-1 py-3 bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-bold transition-all"
+              >
+                Submit Appeal
               </button>
             </div>
           </div>

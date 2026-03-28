@@ -4,7 +4,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import "dotenv/config";
 import multer from "multer";
-import { uploadFileToR2 } from "./src/services/r2Service.js";
+import { uploadToWorker } from "./src/services/r2Service.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -27,7 +27,7 @@ async function startServer() {
     const { folder, userId } = req.body;
     const fileName = `${folder}/${userId}/${Date.now()}-${req.file.originalname}`;
     try {
-      const url = await uploadFileToR2(req.file.buffer, fileName, req.file.mimetype);
+      const url = await uploadToWorker(req.file.buffer, fileName, req.file.mimetype);
       res.json({ url });
     } catch (error) {
       console.error("Upload error:", error);

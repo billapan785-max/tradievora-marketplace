@@ -46,6 +46,8 @@ const Wallet: React.FC = () => {
       if (snapshot.exists()) {
         setInfluencer(snapshot.data());
       }
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, `influencers/${profile.uid}`);
     });
 
     const fetchSettings = async () => {
@@ -202,13 +204,13 @@ const Wallet: React.FC = () => {
             {profile?.availableBalance.toFixed(2)} <span className="text-sm font-normal text-zinc-500 tracking-normal">USDT</span>
           </div>
           <div className="flex gap-3 mt-8">
-            <button onClick={() => setShowDepositModal(true)} className="flex-1 bg-orange-600 hover:bg-orange-700 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-xs transition-all shadow-lg shadow-orange-600/20">Deposit</button>
+            <button onClick={() => setShowDepositModal(true)} className="flex-1 bg-orange-600 hover:bg-orange-700 text-white py-3 md:py-4 rounded-2xl font-black uppercase tracking-widest text-xs transition-all shadow-lg shadow-orange-600/20">Deposit</button>
             <button 
               onClick={() => {
                 setTransferDirection('available_to_seller');
                 setShowTransferModal(true);
               }}
-              className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-xs transition-all"
+              className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-white py-3 md:py-4 rounded-2xl font-black uppercase tracking-widest text-xs transition-all"
             >
               Transfer
             </button>

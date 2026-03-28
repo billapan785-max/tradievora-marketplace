@@ -6,6 +6,7 @@ import { useAuth } from '../AuthContext';
 import { Deposit, Withdrawal, UserProfile, PlatformSettings, Order, Listing, InfluencerProfile, VideoPromotion, Commission, SupportTicket, SupportMessage, Dispute, Evidence, Message } from '../types';
 import { Shield, Users, CreditCard, Settings, Check, X, AlertCircle, TrendingUp, Video, DollarSign, Award, ExternalLink, MessageSquare, Send, User, BadgeCheck, Eye, Info, ArrowRight } from 'lucide-react';
 import { toast } from 'sonner';
+import { sendNotification } from '../lib/notificationService';
 
 const AdminPanel: React.FC = () => {
   const { profile } = useAuth();
@@ -39,7 +40,10 @@ const AdminPanel: React.FC = () => {
       100000: 500,
       500000: 2500,
       1000000: 5000
-    }
+    },
+    bannerTitle: 'Tradiora',
+    bannerSubtitle: 'The Ultimate Digital Asset Trading Platform',
+    bannerImageUrl: 'https://images.unsplash.com/photo-1639762681485-074b7f4ec651?q=80&w=2070&auto=format&fit=crop'
   });
   const [listings, setListings] = useState<Listing[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -68,38 +72,57 @@ const AdminPanel: React.FC = () => {
 
     const unsubDeposits = onSnapshot(collection(db, 'deposits'), (snapshot) => {
       setDeposits(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Deposit)));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'deposits');
     });
 
     const unsubWithdrawals = onSnapshot(collection(db, 'withdrawals'), (snapshot) => {
       setWithdrawals(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Withdrawal)));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'withdrawals');
     });
 
     const unsubUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
       setUsers(snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() } as UserProfile)));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'users');
     });
 
     const unsubInfluencers = onSnapshot(collection(db, 'influencers'), (snapshot) => {
       setInfluencers(snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() } as InfluencerProfile)));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'influencers');
     });
 
     const unsubVideos = onSnapshot(collection(db, 'videos'), (snapshot) => {
       setVideos(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as VideoPromotion)));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'videos');
     });
 
     const unsubCommissions = onSnapshot(collection(db, 'commissions'), (snapshot) => {
       setCommissions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Commission)));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'commissions');
     });
 
     const unsubListings = onSnapshot(collection(db, 'listings'), (snapshot) => {
-      setListings(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Listing)));
+      setListings(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Listing))
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'listings');
     });
 
     const unsubOrders = onSnapshot(collection(db, 'orders'), (snapshot) => {
       setOrders(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order)));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'orders');
     });
 
     const unsubTickets = onSnapshot(query(collection(db, 'support_tickets'), orderBy('updatedAt', 'desc')), (snapshot) => {
       setTickets(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SupportTicket)));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'support_tickets');
     });
 
     const fetchSettings = async () => {
@@ -143,6 +166,8 @@ const AdminPanel: React.FC = () => {
       if (selectedTicket.unreadByAdmin) {
         updateDoc(doc(db, 'support_tickets', selectedTicket.id), { unreadByAdmin: false });
       }
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'support_messages');
     });
 
     return () => unsubscribe();
@@ -167,9 +192,13 @@ const AdminPanel: React.FC = () => {
         const qEvidence = query(collection(db, 'evidence'), where('disputeId', '==', disputeData.id));
         const unsubEvidence = onSnapshot(qEvidence, (snapshot) => {
           setEvidence(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Evidence)));
+        }, (error) => {
+          handleFirestoreError(error, OperationType.LIST, 'evidence');
         });
         return () => unsubEvidence();
       }
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'disputes');
     });
 
     // Fetch Chat Logs
@@ -180,6 +209,8 @@ const AdminPanel: React.FC = () => {
     );
     const unsubMessages = onSnapshot(qMessages, (snapshot) => {
       setOrderMessages(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Message)));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'messages');
     });
 
     return () => {
@@ -221,13 +252,11 @@ const AdminPanel: React.FC = () => {
       });
 
       // Notify influencer
-      await addDoc(collection(db, 'notifications'), {
-        userId: video.influencerId,
+      sendNotification({
+        toId: video.influencerId,
         title: 'Video Approved!',
-        message: `Your video "${video.title}" has been approved. Tracking is now active.`,
-        type: 'video_approved',
-        read: false,
-        createdAt: new Date().toISOString()
+        body: `Your video "${video.title}" has been approved. Tracking is now active.`,
+        data: { type: 'system' }
       });
 
       toast.success('Video approved!');
@@ -244,13 +273,11 @@ const AdminPanel: React.FC = () => {
       });
 
       // Notify influencer
-      await addDoc(collection(db, 'notifications'), {
-        userId: video.influencerId,
+      sendNotification({
+        toId: video.influencerId,
         title: 'Video Rejected',
-        message: `Your video "${video.title}" was rejected. Reason: ${reason}`,
-        type: 'video_rejected',
-        read: false,
-        createdAt: new Date().toISOString()
+        body: `Your video "${video.title}" was rejected. Reason: ${reason}`,
+        data: { type: 'system' }
       });
 
       toast.success('Video rejected');
@@ -263,10 +290,22 @@ const AdminPanel: React.FC = () => {
 
   const handleToggleSuspension = async (u: UserProfile) => {
     try {
+      const newStatus = !u.isSuspended;
       await updateDoc(doc(db, 'users', u.uid), {
-        isSuspended: !u.isSuspended
+        isSuspended: newStatus
       });
-      toast.success(`User ${u.isSuspended ? 'unsuspended' : 'suspended'} successfully`);
+
+      // Notify user
+      sendNotification({
+        toId: u.uid,
+        title: newStatus ? 'Account Suspended' : 'Account Unsuspended',
+        body: newStatus 
+          ? 'Your account has been suspended by an administrator. Please contact support for details.'
+          : 'Your account has been unsuspended. You can now access all features again.',
+        data: { type: 'system' }
+      });
+
+      toast.success(`User ${newStatus ? 'suspended' : 'unsuspended'} successfully`);
     } catch (error) {
       toast.error('Failed to update user status');
     }
@@ -280,6 +319,14 @@ const AdminPanel: React.FC = () => {
       await updateDoc(depositRef, { status: 'approved' });
       await updateDoc(userRef, { availableBalance: increment(deposit.amount) });
       
+      // Notify user about deposit approval
+      sendNotification({
+        toId: deposit.userId,
+        title: 'Deposit Approved!',
+        body: `Your deposit of ${deposit.amount} USDT has been approved and credited to your balance.`,
+        data: { type: 'system' }
+      });
+
       toast.success('Deposit approved and funds credited!');
     } catch (error) {
       toast.error('Failed to approve deposit');
@@ -289,6 +336,19 @@ const AdminPanel: React.FC = () => {
   const handleRejectDeposit = async (id: string) => {
     try {
       await updateDoc(doc(db, 'deposits', id), { status: 'rejected' });
+      
+      // Get deposit data to notify user
+      const depositSnap = await getDoc(doc(db, 'deposits', id));
+      if (depositSnap.exists()) {
+        const depositData = depositSnap.data();
+        sendNotification({
+          toId: depositData.userId,
+          title: 'Deposit Rejected',
+          body: `Your deposit of ${depositData.amount} USDT was rejected. Please contact support if you have questions.`,
+          data: { type: 'system' }
+        });
+      }
+
       toast.success('Deposit rejected');
     } catch (error) {
       toast.error('Failed to reject deposit');
@@ -298,6 +358,25 @@ const AdminPanel: React.FC = () => {
   const handleRejectWithdrawal = async (id: string) => {
     try {
       await updateDoc(doc(db, 'withdrawals', id), { status: 'rejected' });
+      
+      // Get withdrawal data to notify user
+      const withdrawalSnap = await getDoc(doc(db, 'withdrawals', id));
+      if (withdrawalSnap.exists()) {
+        const withdrawalData = withdrawalSnap.data();
+        // Refund user balance
+        const userRef = doc(db, 'users', withdrawalData.userId);
+        await updateDoc(userRef, {
+          withdrawableBalance: increment(withdrawalData.amount)
+        });
+
+        sendNotification({
+          toId: withdrawalData.userId,
+          title: 'Withdrawal Rejected',
+          body: `Your withdrawal of ${withdrawalData.amount} USDT was rejected and funds have been returned to your balance.`,
+          data: { type: 'system' }
+        });
+      }
+
       toast.success('Withdrawal rejected');
     } catch (error) {
       toast.error('Failed to reject withdrawal');
@@ -322,6 +401,14 @@ const AdminPanel: React.FC = () => {
         });
       }
       
+      // Notify user about withdrawal completion
+      sendNotification({
+        toId: withdrawal.userId,
+        title: 'Withdrawal Completed!',
+        body: `Your withdrawal of ${withdrawal.amount} USDT has been processed successfully.`,
+        data: { type: 'system' }
+      });
+
       toast.success('Withdrawal marked as completed!');
     } catch (error) {
       toast.error('Failed to update withdrawal');
@@ -341,6 +428,16 @@ const AdminPanel: React.FC = () => {
       );
       await Promise.all(updatePromises);
 
+      // Notify user
+      sendNotification({
+        toId: user.uid,
+        title: newStatus ? 'Verification Approved!' : 'Verification Removed',
+        body: newStatus 
+          ? 'Your account has been verified by an administrator. You now have a verified badge on your profile and listings.'
+          : 'Your verification status has been removed by an administrator.',
+        data: { type: 'system' }
+      });
+
       toast.success(`User ${newStatus ? 'verified' : 'unverified'}`);
     } catch (error) {
       toast.error('Failed to update user verification status');
@@ -349,7 +446,20 @@ const AdminPanel: React.FC = () => {
 
   const handleDeleteListing = async (id: string) => {
     try {
-      await updateDoc(doc(db, 'listings', id), { status: 'inactive' });
+      const listingSnap = await getDoc(doc(db, 'listings', id));
+      if (listingSnap.exists()) {
+        const listingData = listingSnap.data();
+        await updateDoc(doc(db, 'listings', id), { status: 'inactive' });
+        
+        // Notify seller
+        sendNotification({
+          toId: listingData.sellerId,
+          title: 'Listing Deactivated',
+          body: `Your listing "${listingData.title}" has been deactivated by an administrator.`,
+          data: { type: 'system' }
+        });
+      }
+
       toast.success('Listing deactivated by admin');
       setShowDeleteListingModal(null);
     } catch (error) {
@@ -375,6 +485,22 @@ const AdminPanel: React.FC = () => {
           escrowBalance: increment(-order.amount)
         });
         await updateDoc(orderRef, { status: 'cancelled', adminDecision: 'Refunded by Admin' });
+
+        // Notify buyer about refund
+        sendNotification({
+          toId: order.buyerId,
+          title: 'Order Refunded',
+          body: `Admin has refunded your order for: ${order.listingTitle}`,
+          data: { type: 'order', id: order.id }
+        });
+
+        // Notify seller about refund
+        sendNotification({
+          toId: order.sellerId,
+          title: 'Order Refunded by Admin',
+          body: `Admin has refunded the order for: ${order.listingTitle} to the buyer.`,
+          data: { type: 'order', id: order.id }
+        });
       } else {
         const sellerRef = doc(db, 'users', order.sellerId);
         const buyerRef = doc(db, 'users', order.buyerId);
@@ -385,6 +511,22 @@ const AdminPanel: React.FC = () => {
         });
         await updateDoc(sellerRef, { withdrawableBalance: increment(order.amount - totalFees) });
         await updateDoc(orderRef, { status: 'completed', adminDecision: 'Released by Admin' });
+
+        // Notify seller about released funds
+        sendNotification({
+          toId: order.sellerId,
+          title: 'Order Released!',
+          body: `Admin has released funds for your order: ${order.listingTitle}`,
+          data: { type: 'order', id: order.id }
+        });
+
+        // Notify buyer about released funds
+        sendNotification({
+          toId: order.buyerId,
+          title: 'Order Funds Released',
+          body: `Admin has released the funds for order: ${order.listingTitle} to the seller.`,
+          data: { type: 'order', id: order.id }
+        });
         
         // Distribute Commissions
         const buyerSnap = await getDoc(buyerRef);
@@ -873,8 +1015,21 @@ const AdminPanel: React.FC = () => {
                   .map(l => (
                   <tr key={l.id} className="hover:bg-zinc-800/30 transition-colors">
                     <td className="px-6 py-4">
-                      <div className="text-white font-bold">{l.title}</div>
-                      <div className="text-xs text-zinc-500">{l.category}</div>
+                      <div className="flex items-center space-x-3">
+                        {l.image_url ? (
+                          <div className="w-10 h-10 rounded-lg overflow-hidden bg-zinc-800 flex-shrink-0">
+                            <img src={l.image_url} alt={l.title} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                          </div>
+                        ) : (
+                          <div className="w-10 h-10 rounded-lg bg-zinc-800 flex items-center justify-center flex-shrink-0">
+                            <span className="text-zinc-500 text-xs">No img</span>
+                          </div>
+                        )}
+                        <div>
+                          <div className="text-white font-bold">{l.title}</div>
+                          <div className="text-xs text-zinc-500">{l.category}</div>
+                        </div>
+                      </div>
                     </td>
                     <td className="px-6 py-4">
                       <div className="text-zinc-400 text-sm flex items-center">
@@ -936,6 +1091,13 @@ const AdminPanel: React.FC = () => {
                     o.buyerId.toLowerCase().includes(searchTermOrders.toLowerCase()) ||
                     o.sellerId.toLowerCase().includes(searchTermOrders.toLowerCase())
                   )
+                  .sort((a, b) => {
+                    // Put disputed orders first
+                    if (a.status === 'disputed' && b.status !== 'disputed') return -1;
+                    if (a.status !== 'disputed' && b.status === 'disputed') return 1;
+                    // Then sort by newest
+                    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+                  })
                   .map(o => (
                   <tr key={o.id} className="hover:bg-zinc-800/30 transition-colors">
                     <td className="px-6 py-4">
@@ -1130,6 +1292,7 @@ const AdminPanel: React.FC = () => {
                               <ExternalLink className="h-4 w-4 mb-1" />
                               {ev.type.replace(/_/g, ' ')}
                               <div className="mt-1 opacity-50">{ev.userId === selectedOrder.buyerId ? 'Buyer' : 'Seller'}</div>
+                              {ev.description && <div className="mt-1 text-xs text-zinc-300">{ev.description}</div>}
                             </a>
                           ))}
                         </div>
@@ -1143,22 +1306,42 @@ const AdminPanel: React.FC = () => {
                 <div className="bg-zinc-900 border border-zinc-800 p-6 rounded-3xl">
                   <h3 className="text-lg font-bold text-white mb-4">Final Decision</h3>
                   <p className="text-xs text-zinc-500 mb-6">As an administrator, your decision is final. Choose carefully based on the evidence and chat logs provided.</p>
-                  <div className="grid grid-cols-1 gap-3">
-                    <button 
-                      onClick={() => setShowResolveOrderModal({ orderId: selectedOrder.id, decision: 'release' })}
-                      className="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-2xl font-bold transition-all flex items-center justify-center"
-                    >
-                      <Check className="h-5 w-5 mr-2" />
-                      Release to Seller
-                    </button>
-                    <button 
-                      onClick={() => setShowResolveOrderModal({ orderId: selectedOrder.id, decision: 'refund' })}
-                      className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-2xl font-bold transition-all flex items-center justify-center"
-                    >
-                      <Check className="h-5 w-5 mr-2" />
-                      Refund to Buyer
-                    </button>
-                  </div>
+                  
+                  {(() => {
+                    const disputeOpenedAt = dispute?.createdAt ? new Date(dispute.createdAt).getTime() : 0;
+                    const now = new Date().getTime();
+                    const hoursSinceDispute = (now - disputeOpenedAt) / (1000 * 60 * 60);
+                    const isAppealWindowOpen = hoursSinceDispute <= 24;
+
+                    if (isAppealWindowOpen) {
+                      return (
+                        <div className="p-4 bg-orange-900/20 border border-orange-800/50 rounded-2xl mb-4">
+                          <p className="text-orange-500 text-sm font-bold text-center">
+                            Appeal window is still open ({Math.ceil(24 - hoursSinceDispute)}h remaining). Please wait for both parties to submit their appeals before making a decision.
+                          </p>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div className="grid grid-cols-1 gap-3">
+                        <button 
+                          onClick={() => setShowResolveOrderModal({ orderId: selectedOrder.id, decision: 'release' })}
+                          className="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-2xl font-bold transition-all flex items-center justify-center"
+                        >
+                          <Check className="h-5 w-5 mr-2" />
+                          Release to Seller
+                        </button>
+                        <button 
+                          onClick={() => setShowResolveOrderModal({ orderId: selectedOrder.id, decision: 'refund' })}
+                          className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-2xl font-bold transition-all flex items-center justify-center"
+                        >
+                          <Check className="h-5 w-5 mr-2" />
+                          Refund to Buyer
+                        </button>
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
 
@@ -1492,6 +1675,40 @@ const AdminPanel: React.FC = () => {
                 ))}
               </div>
             </div>
+            <div className="pt-8 border-t border-zinc-800">
+              <h3 className="text-lg font-bold text-white mb-6">Home Banner Settings</h3>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-zinc-400 mb-2">Banner Title</label>
+                  <input
+                    type="text"
+                    className="w-full bg-zinc-800 border border-zinc-700 rounded-xl py-3 px-4 text-white focus:outline-none focus:border-orange-500"
+                    value={settings.bannerTitle ?? ''}
+                    onChange={e => setSettings({...settings, bannerTitle: e.target.value})}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-zinc-400 mb-2">Banner Subtitle</label>
+                  <input
+                    type="text"
+                    className="w-full bg-zinc-800 border border-zinc-700 rounded-xl py-3 px-4 text-white focus:outline-none focus:border-orange-500"
+                    value={settings.bannerSubtitle ?? ''}
+                    onChange={e => setSettings({...settings, bannerSubtitle: e.target.value})}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-zinc-400 mb-2">Banner Image URL</label>
+                  <input
+                    type="text"
+                    className="w-full bg-zinc-800 border border-zinc-700 rounded-xl py-3 px-4 text-white focus:outline-none focus:border-orange-500"
+                    value={settings.bannerImageUrl ?? ''}
+                    onChange={e => setSettings({...settings, bannerImageUrl: e.target.value})}
+                  />
+                  <p className="text-[10px] text-zinc-500 mt-1 uppercase font-bold tracking-wider">Recommended size: 1920x600px or 1920x800px for best fit.</p>
+                </div>
+              </div>
+            </div>
+
             <button
               onClick={handleSaveSettings}
               className="w-full py-4 bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-bold transition-all"

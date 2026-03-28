@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { collection, query, where, onSnapshot, addDoc, orderBy, doc, getDoc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, addDoc, orderBy, doc, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { useAuth } from '../AuthContext';
-import { Message, Order, Listing } from '../types';
-import { Send, User, Shield, AlertCircle, Paperclip, FileText, Image as ImageIcon, Video } from 'lucide-react';
-import { useSearchParams } from 'react-router-dom';
+import { Message, Order, Listing, UserProfile } from '../types';
+import { Send, User, Shield, AlertCircle, Paperclip, FileText, Image as ImageIcon, Video, X } from 'lucide-react';
+import { useSearchParams, useNavigate, Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { uploadFile } from '../lib/upload';
+import { sendNotification } from '../lib/notificationService';
 
 const Messages: React.FC = () => {
   const { profile } = useAuth();
@@ -15,13 +16,152 @@ const Messages: React.FC = () => {
   const sellerId = searchParams.get('seller');
   const listingId = searchParams.get('listing');
   
+  const [otherUser, setOtherUser] = useState<UserProfile | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [order, setOrder] = useState<Order | null>(null);
   const [listing, setListing] = useState<Listing | null>(null);
   const [inputText, setInputText] = useState('');
+  const [isRecording, setIsRecording] = useState(false);
+  const [isOtherUserTyping, setIsOtherUserTyping] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const navigate = useNavigate();
+
+  const [conversations, setConversations] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (!profile) return;
+
+    if (!orderId && !listingId) {
+      const q = query(
+        collection(db, 'messages'),
+        where('participants', 'array-contains', profile.uid),
+        orderBy('createdAt', 'desc')
+      );
+
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+        const allMessages = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Message));
+        
+        // Group by orderId or listingId
+        const grouped: { [key: string]: Message[] } = {};
+        allMessages.forEach(msg => {
+          const key = msg.orderId || msg.listingId || 'unknown';
+          if (!grouped[key]) grouped[key] = [];
+          grouped[key].push(msg);
+        });
+
+        setConversations(Object.entries(grouped).map(([key, msgs]) => ({
+          id: key,
+          lastMessage: msgs[0],
+          type: msgs[0].orderId ? 'order' : 'listing'
+        })));
+        setLoading(false);
+      }, (error) => {
+        handleFirestoreError(error, OperationType.LIST, 'messages');
+        setLoading(false);
+      });
+
+      return () => unsubscribe();
+    }
+  }, [orderId, listingId, profile?.uid]);
+
+  const updateTypingStatus = async (isTyping: boolean) => {
+    if (!profile || (!orderId && !listingId)) return;
+    const typingRef = doc(db, 'typing_status', `${orderId || listingId}_${profile.uid}`);
+    if (isTyping) {
+      await setDoc(typingRef, {
+        orderId: orderId || null,
+        listingId: listingId || null,
+        userId: profile.uid,
+        updatedAt: new Date().toISOString()
+      });
+    } else {
+      await deleteDoc(typingRef);
+    }
+  };
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        await uploadVoiceMessage(audioBlob);
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+    } catch (error) {
+      console.error('Error starting recording:', error);
+      toast.error('Could not access microphone');
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+    }
+  };
+
+  const uploadVoiceMessage = async (blob: Blob) => {
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', blob, 'voice-message.webm');
+
+      const response = await fetch('https://fancy-tree-f711tradiora-upload.billapan785.workers.dev', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) throw new Error('Upload failed');
+      const data = await response.json();
+      const audioUrl = data.url;
+
+      const messageData: any = {
+        senderId: profile?.uid,
+        type: 'voice',
+        audio: audioUrl,
+        createdAt: new Date().toISOString(),
+        participants: [profile?.uid]
+      };
+
+      if (orderId) {
+        messageData.orderId = orderId;
+        const otherId = order?.buyerId === profile?.uid ? order?.sellerId : order?.buyerId;
+        if (otherId && !messageData.participants.includes(otherId)) {
+          messageData.participants.push(otherId);
+        }
+      } else if (listingId && sellerId) {
+        messageData.listingId = listingId;
+        if (!messageData.participants.includes(sellerId)) {
+          messageData.participants.push(sellerId);
+        }
+      }
+
+      await addDoc(collection(db, 'messages'), messageData);
+      toast.success('Voice message sent');
+    } catch (error) {
+      console.error(error);
+      toast.error('Failed to upload voice message');
+    } finally {
+      setUploading(false);
+    }
+  };
 
   useEffect(() => {
     if (!orderId && !listingId) return;
@@ -30,7 +170,15 @@ const Messages: React.FC = () => {
       const fetchOrder = async () => {
         const orderSnap = await getDoc(doc(db, 'orders', orderId));
         if (orderSnap.exists()) {
-          setOrder({ id: orderSnap.id, ...orderSnap.data() } as Order);
+          const orderData = { id: orderSnap.id, ...orderSnap.data() } as Order;
+          setOrder(orderData);
+          
+          // Fetch other user profile
+          const otherId = orderData.buyerId === profile?.uid ? orderData.sellerId : orderData.buyerId;
+          const userSnap = await getDoc(doc(db, 'profiles', otherId));
+          if (userSnap.exists()) {
+            setOtherUser({ uid: userSnap.id, ...userSnap.data() } as UserProfile);
+          }
         }
       };
       fetchOrder();
@@ -41,6 +189,14 @@ const Messages: React.FC = () => {
         const listingSnap = await getDoc(doc(db, 'listings', listingId));
         if (listingSnap.exists()) {
           setListing({ id: listingSnap.id, ...listingSnap.data() } as Listing);
+          
+          // Fetch seller profile
+          if (sellerId) {
+            const userSnap = await getDoc(doc(db, 'profiles', sellerId));
+            if (userSnap.exists()) {
+              setOtherUser({ uid: userSnap.id, ...userSnap.data() } as UserProfile);
+            }
+          }
         }
       };
       fetchListing();
@@ -116,6 +272,21 @@ const Messages: React.FC = () => {
       }
 
       await addDoc(collection(db, 'messages'), messageData);
+      
+      // Send notification to the other user
+      const otherId = orderId 
+        ? (order.buyerId === profile.uid ? order.sellerId : order.buyerId)
+        : sellerId;
+      
+      if (otherId) {
+        sendNotification({
+          toId: otherId,
+          title: `New File from ${profile.displayName}`,
+          body: `Sent a ${type}: ${file.name}`,
+          data: { type: 'message', id: orderId || listingId || '' }
+        });
+      }
+
       toast.success('File uploaded');
     } catch (error) {
       toast.error('Failed to upload file');
@@ -162,6 +333,21 @@ const Messages: React.FC = () => {
       }
 
       await addDoc(collection(db, 'messages'), messageData);
+      
+      // Send notification to the other user
+      const otherId = orderId 
+        ? (order.buyerId === profile.uid ? order.sellerId : order.buyerId)
+        : sellerId;
+      
+      if (otherId) {
+        sendNotification({
+          toId: otherId,
+          title: `New Message from ${profile.displayName}`,
+          body: inputText.length > 50 ? inputText.substring(0, 50) + '...' : inputText,
+          data: { type: 'message', id: orderId || listingId || '' }
+        });
+      }
+
       setInputText('');
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, 'messages');
@@ -169,31 +355,92 @@ const Messages: React.FC = () => {
     }
   };
 
-  if (!orderId && !listingId) return <div className="text-center py-20 text-zinc-500">Select an order or listing to start messaging</div>;
+  if (!orderId && !listingId) {
+    return (
+      <div className="w-full h-[calc(100vh-64px)] md:h-[calc(100vh-180px)] md:max-w-4xl md:mx-auto md:rounded-3xl flex flex-col bg-zinc-900 border border-zinc-800 overflow-hidden shadow-2xl relative">
+        <div className="p-6 border-b border-zinc-800">
+          <h2 className="text-2xl font-bold text-white">Messages</h2>
+        </div>
+        <div className="flex-1 overflow-y-auto">
+          {conversations.length === 0 ? (
+            <div className="text-center py-20 text-zinc-500">No messages yet.</div>
+          ) : (
+            conversations.map((conv) => (
+              <Link
+                key={conv.id}
+                to={`/messages?${conv.type}=${conv.id}`}
+                className="block p-4 border-b border-zinc-800 hover:bg-zinc-800 transition-colors"
+              >
+                <div className="flex justify-between items-center">
+                  <div className="text-white font-semibold">
+                    {conv.type === 'order' ? `Order #${conv.id.slice(-8)}` : `Listing Inquiry`}
+                  </div>
+                  <div className="text-xs text-zinc-500">
+                    {new Date(conv.lastMessage.createdAt).toLocaleDateString()}
+                  </div>
+                </div>
+                <div className="text-sm text-zinc-400 truncate mt-1">
+                  {conv.lastMessage.text || 'Sent a file/voice message'}
+                </div>
+              </Link>
+            ))
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="max-w-4xl mx-auto h-[calc(100vh-200px)] flex flex-col bg-zinc-900 border border-zinc-800 rounded-3xl overflow-hidden shadow-2xl">
+    <div className="w-full h-[calc(100vh-64px)] md:h-[calc(100vh-180px)] md:max-w-4xl md:mx-auto md:rounded-3xl flex flex-col bg-zinc-900 border border-zinc-800 overflow-hidden shadow-2xl relative">
       {/* Header */}
-      <div className="p-6 border-b border-zinc-800 bg-zinc-900/50 flex items-center justify-between">
+      <div className="p-4 md:p-6 border-b border-zinc-800 bg-zinc-900/50 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center">
-          <div className="h-10 w-10 bg-orange-600/20 rounded-xl flex items-center justify-center mr-4">
+          <button 
+            onClick={() => navigate(-1)}
+            className="md:hidden mr-3 p-2 bg-zinc-800 rounded-lg text-zinc-400 hover:text-white transition-colors"
+          >
+            <X className="h-5 w-5" />
+          </button>
+          <div className="h-10 w-10 bg-orange-600/20 rounded-xl flex items-center justify-center mr-4 flex-shrink-0">
             <Shield className="h-6 w-6 text-orange-500" />
           </div>
-          <div>
-            <h2 className="text-white font-bold">{order?.listingTitle || listing?.title || 'Chat'}</h2>
-            <p className="text-zinc-500 text-xs">
-              {orderId ? `Order #${orderId.slice(-8)}` : `Listing Inquiry`}
-            </p>
+          <div className="flex-1 min-w-0">
+            <h2 className="text-white font-bold truncate">{order?.listingTitle || listing?.title || 'Chat'}</h2>
+            <div className="flex items-center gap-2">
+              <p className="text-zinc-500 text-xs truncate">
+                {orderId ? `Order #${orderId.slice(-8)}` : `Listing Inquiry`}
+              </p>
+              {otherUser && (
+                <>
+                  <span className="text-zinc-700">•</span>
+                  <Link 
+                    to={otherUser.role === 'seller' ? `/seller/${otherUser.uid}` : `/profile/${otherUser.uid}`}
+                    className="text-orange-500 text-xs font-bold hover:underline truncate"
+                  >
+                    {otherUser.displayName || 'User'}
+                  </Link>
+                </>
+              )}
+            </div>
           </div>
         </div>
-        <div className="flex items-center text-xs text-zinc-500 bg-zinc-800 px-3 py-1 rounded-full">
-          <AlertCircle className="h-3 w-3 mr-1 text-orange-500" />
-          Secure Escrow Chat
+        <div className="flex items-center justify-between md:justify-end gap-4">
+          <div className="flex items-center text-xs text-zinc-500 bg-zinc-800 px-3 py-1 rounded-full">
+            <AlertCircle className="h-3 w-3 mr-1 text-orange-500" />
+            Secure Escrow Chat
+          </div>
+          <button 
+            onClick={() => navigate(-1)}
+            className="hidden md:flex p-2 bg-zinc-800 rounded-lg text-zinc-400 hover:text-white transition-colors"
+          >
+            <X className="h-5 w-5" />
+          </button>
         </div>
       </div>
 
       {/* Messages Area */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 space-y-4 scroll-smooth">
+        {isOtherUserTyping && <div className="text-xs text-orange-500 italic">User is typing...</div>}
         {messages.map((msg) => (
           <div
             key={msg.id}
@@ -207,6 +454,7 @@ const Messages: React.FC = () => {
               }`}
             >
               <p className="leading-relaxed">
+              {msg.type === 'voice' && <audio controls src={msg.audio} className="max-w-full" />}
                 {msg.type === 'text' && msg.text}
                 {msg.type === 'image' && <img src={msg.url} alt="Message" className="max-w-full rounded-lg" />}
                 {msg.type === 'video' && <video src={msg.url} controls className="max-w-full rounded-lg" />}
@@ -231,8 +479,8 @@ const Messages: React.FC = () => {
       </div>
 
       {/* Input Area */}
-      <div className="p-6 border-t border-zinc-800 bg-zinc-900/50">
-        <form onSubmit={handleSendMessage} className="flex gap-4">
+      <div className="p-4 md:p-6 border-t border-zinc-800 bg-zinc-900/50">
+        <form onSubmit={handleSendMessage} className="flex gap-2 md:gap-4">
           <input
             type="file"
             accept="image/*,application/pdf,application/zip,application/vnd.openxmlformats-officedocument.wordprocessingml.document,video/mp4"
@@ -241,21 +489,31 @@ const Messages: React.FC = () => {
             id="file-upload"
             disabled={uploading}
           />
-          <label htmlFor="file-upload" className={`cursor-pointer bg-zinc-800 hover:bg-zinc-700 text-white p-3 rounded-xl transition-all ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
-            <Paperclip className="h-6 w-6" />
+          <label htmlFor="file-upload" className={`cursor-pointer bg-zinc-800 hover:bg-zinc-700 text-white p-2 md:p-3 rounded-xl transition-all flex items-center justify-center ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
+            <Paperclip className="h-5 w-5 md:h-6 md:w-6" />
           </label>
+          <button
+            type="button"
+            onClick={isRecording ? stopRecording : startRecording}
+            className={`p-2 md:p-3 rounded-xl transition-all flex items-center justify-center ${isRecording ? 'bg-red-600 animate-pulse' : 'bg-zinc-800 hover:bg-zinc-700 text-white'}`}
+          >
+            {isRecording ? 'Recording...' : '🎤'}
+          </button>
           <input
             type="text"
             placeholder="Type your message securely..."
-            className="flex-1 bg-zinc-800 border border-zinc-700 rounded-xl py-3 px-4 text-white focus:outline-none focus:border-orange-500 transition-colors"
+            className="flex-1 bg-zinc-800 border border-zinc-700 rounded-xl py-2 px-3 md:py-3 md:px-4 text-sm md:text-base text-white focus:outline-none focus:border-orange-500 transition-colors"
             value={inputText}
-            onChange={(e) => setInputText(e.target.value)}
+            onChange={(e) => {
+              setInputText(e.target.value);
+              updateTypingStatus(e.target.value.length > 0);
+            }}
           />
           <button
             type="submit"
-            className="bg-orange-600 hover:bg-orange-700 text-white p-3 rounded-xl transition-all"
+            className="bg-orange-600 hover:bg-orange-700 text-white p-2 md:p-3 rounded-xl transition-all flex items-center justify-center"
           >
-            <Send className="h-6 w-6" />
+            <Send className="h-5 w-5 md:h-6 md:w-6" />
           </button>
         </form>
         <p className="text-[10px] text-zinc-600 mt-3 text-center uppercase font-bold tracking-widest">

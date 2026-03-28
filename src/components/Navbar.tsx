@@ -4,6 +4,7 @@ import { useAuth } from '../AuthContext';
 import { auth } from '../lib/firebase';
 import { ShoppingCart, Wallet, User, LogOut, Shield, MessageSquare, Package, BadgeCheck, Menu, X } from 'lucide-react';
 import { Logo } from './Logo';
+import NotificationBell from './NotificationBell';
 
 const Navbar: React.FC = () => {
   const { profile, user } = useAuth();
@@ -45,6 +46,9 @@ const Navbar: React.FC = () => {
                   <Wallet className="h-4 w-4 mr-2 text-orange-500" />
                   <span>{((profile?.availableBalance || 0) + (profile?.withdrawableBalance || 0)).toFixed(2)} USDT</span>
                 </Link>
+                
+                <NotificationBell />
+
                 <div className="hidden sm:flex relative group">
                   <button className="flex items-center text-zinc-300 hover:text-white px-3 py-2 text-sm font-medium">
                     <User className="h-5 w-5 mr-1" />
@@ -73,41 +77,9 @@ const Navbar: React.FC = () => {
                 <Link to="/register" className="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">Register</Link>
               </div>
             )}
-            <button
-              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className="sm:hidden text-zinc-300 hover:text-white"
-            >
-              {isMobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
-            </button>
           </div>
         </div>
       </div>
-      {/* Mobile Menu */}
-      {isMobileMenuOpen && (
-        <div className="sm:hidden bg-zinc-900 border-t border-zinc-800">
-          <div className="px-2 pt-2 pb-3 space-y-1">
-            <Link to="/marketplace" className="block text-zinc-300 hover:text-white px-3 py-2 text-base font-medium" onClick={() => setIsMobileMenuOpen(false)}>Marketplace</Link>
-            <Link to="/leaderboard" className="block text-zinc-300 hover:text-white px-3 py-2 text-base font-medium" onClick={() => setIsMobileMenuOpen(false)}>Leaderboard</Link>
-            <Link to="/reviews" className="block text-zinc-300 hover:text-white px-3 py-2 text-base font-medium" onClick={() => setIsMobileMenuOpen(false)}>Reviews</Link>
-            <Link to="/influencer" className="block text-zinc-300 hover:text-white px-3 py-2 text-base font-medium" onClick={() => setIsMobileMenuOpen(false)}>Earn USDT</Link>
-            {user && (
-              <>
-                <Link to="/orders" className="block text-zinc-300 hover:text-white px-3 py-2 text-base font-medium" onClick={() => setIsMobileMenuOpen(false)}>Orders</Link>
-                <Link to="/messages" className="block text-zinc-300 hover:text-white px-3 py-2 text-base font-medium" onClick={() => setIsMobileMenuOpen(false)}>Messages</Link>
-                <Link to="/wallet" className="block text-zinc-300 hover:text-white px-3 py-2 text-base font-medium" onClick={() => setIsMobileMenuOpen(false)}>Wallet ({((profile?.availableBalance || 0) + (profile?.withdrawableBalance || 0)).toFixed(2)} USDT)</Link>
-                <Link to="/dashboard" className="block text-zinc-300 hover:text-white px-3 py-2 text-base font-medium" onClick={() => setIsMobileMenuOpen(false)}>Dashboard</Link>
-                <button onClick={handleLogout} className="block w-full text-left text-red-400 hover:text-white px-3 py-2 text-base font-medium">Logout</button>
-              </>
-            )}
-            {!user && (
-              <>
-                <Link to="/login" className="block text-zinc-300 hover:text-white px-3 py-2 text-base font-medium" onClick={() => setIsMobileMenuOpen(false)}>Login</Link>
-                <Link to="/register" className="block text-orange-500 hover:text-orange-400 px-3 py-2 text-base font-medium" onClick={() => setIsMobileMenuOpen(false)}>Register</Link>
-              </>
-            )}
-          </div>
-        </div>
-      )}
     </nav>
   );
 };

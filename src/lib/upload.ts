@@ -1,19 +1,24 @@
 export const uploadFile = async (file: File, folder: string, userId: string): Promise<string> => {
   const formData = new FormData();
   formData.append("file", file);
-  formData.append("folder", folder);
-  formData.append("userId", userId);
 
-  const response = await fetch("/api/upload", {
-    method: "POST",
-    body: formData,
-  });
+  const response = await fetch(
+    "https://fancy-tree-f711tradiora-upload.billapan785.workers.dev",
+    {
+      method: "POST",
+      body: formData,
+    }
+  );
 
   if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.error || "Upload failed");
+    const errorText = await response.text().catch(() => "Unknown error");
+    throw new Error(`Worker Error (${response.status}): ${errorText}`);
   }
 
-  const { url } = await response.json();
-  return url;
+  try {
+    const data = await response.json();
+    return data.url || data.image_url;
+  } catch (e) {
+    throw new Error("Worker returned invalid JSON");
+  }
 };
