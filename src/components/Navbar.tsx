@@ -24,7 +24,7 @@ const Navbar: React.FC = () => {
           <div className="flex items-center">
             <Link to="/" className="flex-shrink-0 flex items-center">
               <Logo className="h-8 w-8" />
-              <span className="ml-2 text-xl font-bold text-white">Tradiora</span>
+              <span className="ml-2 text-xl font-bold text-white">Tradrox</span>
             </Link>
             <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
               <Link to="/marketplace" className="text-zinc-300 hover:text-white px-3 py-2 text-sm font-medium">Marketplace</Link>

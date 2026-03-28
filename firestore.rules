@@ -94,23 +94,26 @@ service cloud.firestore {
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('isSuspended', false) == true;
     }
 
+    function isUnchanged(field) {
+      return request.resource.data.get(field, null) == resource.data.get(field, null);
+    }
+
     function isValidUser(data) {
-      return hasOnlyAllowedFields(['uid', 'email', 'role', 'availableBalance', 'escrowBalance', 'withdrawableBalance', 'isSuspended', 'isVerified', 'referrerId', 'referralChain', 'createdAt', 'updatedAt', 'lastSeen', 'responseTime', 'trustScore', 'image_url', 'displayName', 'fcmToken', 'wallet', 'totalEarnings', 'totalReferrals', 'totalSales', 'totalVolume', 'levelEarnings', 'rank', 'pendingEarnings', 'bio', 'location', 'website']) &&
-             data.uid is string &&
-             isValidEmail(data.email) &&
-             data.role in ['buyer', 'seller', 'influencer', 'admin'] &&
-             data.availableBalance is number &&
-             data.escrowBalance is number &&
-             data.withdrawableBalance is number &&
-             data.isSuspended is bool &&
-             data.isVerified is bool &&
+      return (!('uid' in data) || data.uid is string) &&
+             (!('email' in data) || isValidEmail(data.email)) &&
+             (!('role' in data) || data.role in ['buyer', 'seller', 'influencer', 'admin']) &&
+             (!('availableBalance' in data) || data.availableBalance is number) &&
+             (!('escrowBalance' in data) || data.escrowBalance is number) &&
+             (!('withdrawableBalance' in data) || data.withdrawableBalance is number) &&
+             (!('isSuspended' in data) || data.isSuspended is bool) &&
+             (!('isVerified' in data) || data.isVerified is bool) &&
              (!('referrerId' in data) || (data.referrerId == null || data.referrerId is string)) &&
              (!('referralChain' in data) || data.referralChain is list) &&
-             data.createdAt is string &&
+             (!('createdAt' in data) || data.createdAt is string) &&
              (!('updatedAt' in data) || data.updatedAt is string) &&
              (!('lastSeen' in data) || data.lastSeen is string) &&
              (!('responseTime' in data) || (data.responseTime is string && data.responseTime.size() < 100)) &&
-             data.trustScore is number &&
+             (!('trustScore' in data) || data.trustScore is number) &&
              (!('image_url' in data) || (data.image_url is string && data.image_url.size() < 2000)) &&
              (!('displayName' in data) || (data.displayName is string && data.displayName.size() < 200)) &&
              (!('fcmToken' in data) || (data.fcmToken is string || data.fcmToken == null)) &&
@@ -128,15 +131,14 @@ service cloud.firestore {
     }
 
     function isValidProfile(data) {
-      return hasOnlyAllowedFields(['uid', 'displayName', 'image_url', 'role', 'isVerified', 'responseTime', 'trustScore', 'createdAt', 'updatedAt', 'lastSeen', 'fcmToken', 'bio', 'location', 'website']) &&
-             data.uid is string &&
-             data.displayName is string && data.displayName.size() < 200 &&
+      return (!('uid' in data) || data.uid is string) &&
+             (!('displayName' in data) || (data.displayName is string && data.displayName.size() < 200)) &&
              (!('image_url' in data) || (data.image_url is string && data.image_url.size() < 2000)) &&
-             data.role in ['buyer', 'seller', 'influencer', 'admin'] &&
-             data.isVerified is bool &&
-             data.trustScore is number &&
+             (!('role' in data) || data.role in ['buyer', 'seller', 'influencer', 'admin']) &&
+             (!('isVerified' in data) || data.isVerified is bool) &&
+             (!('trustScore' in data) || data.trustScore is number) &&
              (!('responseTime' in data) || (data.responseTime is string && data.responseTime.size() < 100)) &&
-             data.createdAt is string &&
+             (!('createdAt' in data) || data.createdAt is string) &&
              (!('updatedAt' in data) || data.updatedAt is string) &&
              (!('lastSeen' in data) || data.lastSeen is string) &&
              (!('fcmToken' in data) || (data.fcmToken is string || data.fcmToken == null)) &&
@@ -361,27 +363,64 @@ service cloud.firestore {
         (request.auth.uid == userId && 
          isValidUser(request.resource.data) &&
          // Prevent sensitive field changes for non-admins
-         request.resource.data.role == resource.data.role && 
-         request.resource.data.isSuspended == resource.data.isSuspended &&
-         request.resource.data.availableBalance == resource.data.availableBalance &&
-         request.resource.data.escrowBalance == resource.data.escrowBalance &&
-         request.resource.data.withdrawableBalance == resource.data.withdrawableBalance &&
-         request.resource.data.isVerified == resource.data.isVerified &&
-         request.resource.data.trustScore == resource.data.trustScore)
+         isUnchanged('uid') &&
+         isUnchanged('email') &&
+         isUnchanged('role') &&
+         isUnchanged('isSuspended') &&
+         isUnchanged('isVerified') &&
+         isUnchanged('referrerId') &&
+         isUnchanged('referralChain') &&
+         isUnchanged('createdAt') &&
+         isUnchanged('trustScore') &&
+         isUnchanged('withdrawableBalance') &&
+         isUnchanged('totalEarnings') &&
+         isUnchanged('totalReferrals') &&
+         isUnchanged('totalSales') &&
+         isUnchanged('totalVolume') &&
+         isUnchanged('levelEarnings') &&
+         isUnchanged('rank') &&
+         isUnchanged('pendingEarnings') &&
+         // Allow moving availableBalance to escrowBalance
+         (
+           (isUnchanged('availableBalance') && isUnchanged('escrowBalance')) 
+           ||
+           (request.resource.data.get('availableBalance', 0) + request.resource.data.get('escrowBalance', 0) == resource.data.get('availableBalance', 0) + resource.data.get('escrowBalance', 0) &&
+            request.resource.data.get('availableBalance', 0) <= resource.data.get('availableBalance', 0))
+         )
+        )
       );
     }
 
     match /profiles/{userId} {
       allow read: if true;
       allow create: if isAuthenticated() && (request.auth.uid == userId || isAdmin()) && isValidProfile(request.resource.data);
-      allow update: if isAuthenticated() && (isAdmin() || (request.auth.uid == userId && isValidProfile(request.resource.data)));
+      allow update: if isAuthenticated() && (
+        (isAdmin() && isValidProfile(request.resource.data)) || 
+        (request.auth.uid == userId && 
+         isValidProfile(request.resource.data) &&
+         isUnchanged('uid') &&
+         isUnchanged('role') &&
+         isUnchanged('isVerified') &&
+         isUnchanged('trustScore') &&
+         isUnchanged('createdAt')
+        )
+      );
     }
 
     match /influencers/{influencerId} {
       allow read: if true;
       allow create: if isAuthenticated() && request.auth.uid == influencerId && isValidInfluencer(request.resource.data);
       allow update: if isAdmin() || 
-                      (isAuthenticated() && request.auth.uid == influencerId && isValidInfluencer(request.resource.data)) ||
+                      (isAuthenticated() && request.auth.uid == influencerId && isValidInfluencer(request.resource.data) &&
+                       isUnchanged('totalReferrals') &&
+                       isUnchanged('totalSales') &&
+                       isUnchanged('totalVolume') &&
+                       isUnchanged('totalEarnings') &&
+                       isUnchanged('pendingEarnings') &&
+                       isUnchanged('withdrawnBalance') &&
+                       isUnchanged('levelEarnings') &&
+                       isUnchanged('rank')
+                      ) ||
                       (isAuthenticated() && 
                        request.resource.data.diff(resource.data).affectedKeys().hasAny(['totalReferrals', 'totalEarnings', 'totalSales', 'totalVolume', 'levelEarnings']) &&
                        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['totalReferrals', 'totalEarnings', 'totalSales', 'totalVolume', 'levelEarnings', 'rank', 'pendingEarnings']) &&

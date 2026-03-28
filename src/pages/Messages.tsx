@@ -3,7 +3,7 @@ import { collection, query, where, onSnapshot, addDoc, orderBy, doc, getDoc, set
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { useAuth } from '../AuthContext';
 import { Message, Order, Listing, UserProfile } from '../types';
-import { Send, User, Shield, AlertCircle, Paperclip, FileText, Image as ImageIcon, Video, X, MessageSquare } from 'lucide-react';
+import { Send, User, Shield, AlertCircle, Paperclip, FileText, Image as ImageIcon, Video, X, MessageSquare, Mic, Square } from 'lucide-react';
 import { useSearchParams, useNavigate, Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { uploadFile } from '../lib/upload';
@@ -134,7 +134,7 @@ const Messages: React.FC = () => {
           toId: otherId,
           title: `New Voice Message from ${profile?.displayName}`,
           body: 'Sent a voice message',
-          data: { type: 'message', id: orderId || listingId || '' }
+          data: { type: 'message', id: orderId ? `?order=${orderId}` : `?listing=${listingId}&seller=${sellerId}` }
         });
       }
 
@@ -357,7 +357,7 @@ const Messages: React.FC = () => {
           toId: otherId,
           title: `New File from ${profile.displayName}`,
           body: `Sent a ${type}: ${file.name}`,
-          data: { type: 'message', id: orderId || listingId || '' }
+          data: { type: 'message', id: orderId ? `?order=${orderId}` : `?listing=${listingId}&seller=${sellerId}` }
         });
       }
 
@@ -418,7 +418,7 @@ const Messages: React.FC = () => {
           toId: otherId,
           title: `New Message from ${profile.displayName}`,
           body: inputText.length > 50 ? inputText.substring(0, 50) + '...' : inputText,
-          data: { type: 'message', id: orderId || listingId || '' }
+          data: { type: 'message', id: orderId ? `?order=${orderId}` : `?listing=${listingId}&seller=${sellerId}` }
         });
       }
 
@@ -543,15 +543,14 @@ const Messages: React.FC = () => {
       </div>
 
       {/* Messages Area */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 space-y-4 scroll-smooth">
-        {isOtherUserTyping && <div className="text-xs text-orange-500 italic">User is typing...</div>}
+      <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 md:p-6 space-y-3 md:space-y-4 scroll-smooth">
         {messages.map((msg) => (
           <div
             key={msg.id}
             className={`flex ${msg.senderId === profile?.uid ? 'justify-end' : 'justify-start'}`}
           >
             <div
-              className={`max-w-[80%] p-4 rounded-2xl text-sm ${
+              className={`max-w-[85%] md:max-w-[75%] px-3 py-2 md:px-4 md:py-3 rounded-2xl text-[13px] md:text-sm ${
                 msg.senderId === profile?.uid
                   ? 'bg-orange-600 text-white rounded-tr-none'
                   : 'bg-zinc-800 text-zinc-100 rounded-tl-none'
@@ -575,6 +574,15 @@ const Messages: React.FC = () => {
             </div>
           </div>
         ))}
+        {isOtherUserTyping && (
+          <div className="flex justify-start">
+            <div className="bg-zinc-800/50 text-zinc-400 px-3 py-2 md:px-4 md:py-3 rounded-2xl rounded-tl-none text-xs italic flex items-center gap-1.5 w-fit">
+              <span className="w-1.5 h-1.5 bg-zinc-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
+              <span className="w-1.5 h-1.5 bg-zinc-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
+              <span className="w-1.5 h-1.5 bg-zinc-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
+            </div>
+          </div>
+        )}
         {messages.length === 0 && !loading && (
           <div className="text-center py-10">
             <p className="text-zinc-600 text-sm italic">No messages yet. Start the conversation!</p>
@@ -584,7 +592,7 @@ const Messages: React.FC = () => {
 
       {/* Input Area */}
       <div className="p-4 md:p-6 border-t border-zinc-800 bg-zinc-900/50">
-        <form onSubmit={handleSendMessage} className="flex gap-2 md:gap-4">
+        <form onSubmit={handleSendMessage} className="flex gap-2 md:gap-4 items-center">
           <input
             type="file"
             accept="image/*,application/pdf,application/zip,application/vnd.openxmlformats-officedocument.wordprocessingml.document,video/mp4"
@@ -593,20 +601,21 @@ const Messages: React.FC = () => {
             id="file-upload"
             disabled={uploading}
           />
-          <label htmlFor="file-upload" className={`cursor-pointer bg-zinc-800 hover:bg-zinc-700 text-white p-2 md:p-3 rounded-xl transition-all flex items-center justify-center ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
+          <label htmlFor="file-upload" className={`cursor-pointer flex-shrink-0 bg-zinc-800 hover:bg-zinc-700 text-white p-2 md:p-3 rounded-xl transition-all flex items-center justify-center ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
             <Paperclip className="h-5 w-5 md:h-6 md:w-6" />
           </label>
           <button
             type="button"
             onClick={isRecording ? stopRecording : startRecording}
-            className={`p-2 md:p-3 rounded-xl transition-all flex items-center justify-center ${isRecording ? 'bg-red-600 animate-pulse' : 'bg-zinc-800 hover:bg-zinc-700 text-white'}`}
+            className={`p-2 md:p-3 flex-shrink-0 rounded-xl transition-all flex items-center justify-center min-w-[40px] md:min-w-[48px] ${isRecording ? 'bg-red-600 animate-pulse' : 'bg-zinc-800 hover:bg-zinc-700 text-white'}`}
+            title={isRecording ? "Stop Recording" : "Start Recording"}
           >
-            {isRecording ? 'Recording...' : '🎤'}
+            {isRecording ? <Square className="h-5 w-5 md:h-6 md:w-6 fill-current" /> : <Mic className="h-5 w-5 md:h-6 md:w-6" />}
           </button>
           <input
             type="text"
             placeholder="Type your message securely..."
-            className="flex-1 bg-zinc-800 border border-zinc-700 rounded-xl py-2 px-3 md:py-3 md:px-4 text-sm md:text-base text-white focus:outline-none focus:border-orange-500 transition-colors"
+            className="flex-1 min-w-0 bg-zinc-800 border border-zinc-700 rounded-xl py-2 px-3 md:py-3 md:px-4 text-sm md:text-base text-white focus:outline-none focus:border-orange-500 transition-colors"
             value={inputText}
             onChange={(e) => {
               setInputText(e.target.value);
@@ -615,7 +624,7 @@ const Messages: React.FC = () => {
           />
           <button
             type="submit"
-            className="bg-orange-600 hover:bg-orange-700 text-white p-2 md:p-3 rounded-xl transition-all flex items-center justify-center"
+            className="bg-orange-600 flex-shrink-0 hover:bg-orange-700 text-white p-2 md:p-3 rounded-xl transition-all flex items-center justify-center"
           >
             <Send className="h-5 w-5 md:h-6 md:w-6" />
           </button>

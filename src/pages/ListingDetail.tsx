@@ -166,7 +166,7 @@ const ListingDetail: React.FC = () => {
       toast.success('Order placed successfully! Payment is held in escrow and will be released after order completion.');
       navigate(`/orders/${orderRef.id}`);
     } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, 'orders/users');
+      handleFirestoreError(error, OperationType.WRITE, 'users');
       toast.error('Failed to place order.');
     } finally {
       setBuying(false);

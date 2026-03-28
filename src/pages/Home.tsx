@@ -63,7 +63,7 @@ const Home: React.FC = () => {
         ></div>
         <div className="relative z-10 text-center px-4">
           <h1 className="text-5xl md:text-7xl font-black text-white tracking-tighter uppercase drop-shadow-lg">
-            {settings?.bannerTitle || 'Tradiora'}
+            {settings?.bannerTitle || 'Tradrox'}
           </h1>
           <p className="text-orange-100 text-lg md:text-xl mt-4 font-medium tracking-wide max-w-2xl mx-auto drop-shadow-md">
             {settings?.bannerSubtitle || 'The Ultimate Digital Asset Trading Platform'}
@@ -84,7 +84,7 @@ const Home: React.FC = () => {
               Secure Escrow Marketplace
             </span>
             <h2 className="text-5xl md:text-7xl font-extrabold text-white tracking-tight leading-tight">
-              Buy & Sell on <span className="text-orange-600">Tradiora.</span>
+              Buy & Sell on <span className="text-orange-600">Tradrox.</span>
             </h2>
             <p className="mt-6 text-xl text-zinc-400 max-w-2xl mx-auto">
               The premier platform for high-quality digital assets. Every transaction is protected by our middleman escrow system. USDT only.
@@ -268,7 +268,7 @@ const Home: React.FC = () => {
         <div className="relative z-10 max-w-3xl mx-auto">
           <h2 className="text-4xl md:text-5xl font-bold mb-6">Ready to start trading?</h2>
           <p className="text-orange-100 text-lg mb-10">
-            Join thousands of users already buying and selling on Tradiora, the most trusted digital asset marketplace.
+            Join thousands of users already buying and selling on Tradrox, the most trusted digital asset marketplace.
           </p>
           <div className="flex flex-wrap justify-center gap-8 mb-12">
             <div className="flex items-center">

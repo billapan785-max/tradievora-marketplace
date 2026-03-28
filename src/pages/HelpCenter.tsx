@@ -186,12 +186,12 @@ const HelpCenter: React.FC = () => {
               key={msg.id} 
               className={`flex ${msg.senderId === user.uid ? 'justify-end' : 'justify-start'}`}
             >
-              <div className={`max-w-[80%] rounded-2xl p-4 ${
+              <div className={`max-w-[85%] md:max-w-[75%] px-3 py-2 md:px-4 md:py-3 rounded-2xl ${
                 msg.senderId === user.uid 
                   ? 'bg-orange-600 text-white rounded-tr-none' 
                   : 'bg-zinc-800 text-zinc-100 rounded-tl-none border border-zinc-700'
               }`}>
-                <p className="text-sm leading-relaxed">{msg.text}</p>
+                <p className="text-[13px] md:text-sm leading-relaxed">{msg.text}</p>
                 <p className={`text-[10px] mt-2 font-bold uppercase tracking-widest ${
                   msg.senderId === user.uid ? 'text-orange-200' : 'text-zinc-500'
                 }`}>
@@ -204,18 +204,18 @@ const HelpCenter: React.FC = () => {
 
         {/* Input */}
         <form onSubmit={handleSendMessage} className="p-4 bg-zinc-900 border-t border-zinc-800">
-          <div className="flex space-x-2 md:space-x-4">
+          <div className="flex space-x-2 md:space-x-4 items-center">
             <input 
               type="text"
               placeholder="Type your message here..."
-              className="flex-1 bg-zinc-800 border border-zinc-700 rounded-xl py-2 px-3 md:py-3 md:px-4 text-sm md:text-base text-white focus:outline-none focus:border-orange-500 transition-all"
+              className="flex-1 min-w-0 bg-zinc-800 border border-zinc-700 rounded-xl py-2 px-3 md:py-3 md:px-4 text-sm md:text-base text-white focus:outline-none focus:border-orange-500 transition-all"
               value={newMessage}
               onChange={(e) => setNewMessage(e.target.value)}
             />
             <button 
               type="submit"
               disabled={!newMessage.trim()}
-              className="px-4 md:px-6 bg-orange-600 hover:bg-orange-700 disabled:bg-zinc-800 text-white rounded-xl font-bold transition-all flex items-center justify-center"
+              className="px-4 md:px-6 py-2 md:py-3 flex-shrink-0 bg-orange-600 hover:bg-orange-700 disabled:bg-zinc-800 text-white rounded-xl font-bold transition-all flex items-center justify-center"
             >
               <Send className="h-5 w-5" />
             </button>

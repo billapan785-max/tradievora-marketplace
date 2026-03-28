@@ -14,7 +14,7 @@ const Footer: React.FC<FooterProps> = ({ className }) => {
           <div className="col-span-1 md:col-span-2">
             <div className="flex items-center mb-4">
               <Logo className="h-8 w-8" />
-              <span className="ml-2 text-xl font-bold text-white">Tradiora</span>
+              <span className="ml-2 text-xl font-bold text-white">Tradrox</span>
             </div>
             <p className="text-zinc-400 text-sm max-w-sm">
               The most secure marketplace for digital accounts and services. 
@@ -41,7 +41,7 @@ const Footer: React.FC<FooterProps> = ({ className }) => {
           </div>
         </div>
         <div className="border-t border-zinc-800 mt-12 pt-8 text-center text-zinc-500 text-sm">
-          &copy; {new Date().getFullYear()} Tradiora. All rights reserved.
+          &copy; {new Date().getFullYear()} Tradrox. All rights reserved.
         </div>
       </div>
     </footer>

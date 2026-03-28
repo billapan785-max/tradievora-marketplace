@@ -50,7 +50,7 @@ const Privacy: React.FC = () => {
       <div className="bg-blue-600/10 border border-blue-600/20 p-8 rounded-3xl">
         <h3 className="text-white font-bold mb-4">Contact Us</h3>
         <p className="text-sm text-zinc-400 leading-relaxed">
-          If you have any questions about our Privacy Policy, please contact us through the Help Center or by email at privacy@tradiora.com.
+          If you have any questions about our Privacy Policy, please contact us through the Help Center or by email at privacy@tradrox.com.
         </p>
       </div>
     </div>

@@ -40,7 +40,7 @@ const Reviews: React.FC = () => {
           Community <span className="text-orange-600">Feedback</span>
         </h1>
         <p className="text-zinc-400 text-lg max-w-2xl mx-auto">
-          Real reviews from real traders. Transparency is the core of Tradiora.
+          Real reviews from real traders. Transparency is the core of Tradrox.
         </p>
       </div>
 

@@ -59,13 +59,26 @@ const NotificationBell: React.FC = () => {
 
     switch (notification.type) {
       case 'message':
-        navigate(`/chat/${notification.relatedId}`);
+        if (notification.relatedId && notification.relatedId.startsWith('?')) {
+          navigate(`/messages${notification.relatedId}`);
+        } else {
+          // Fallback for older notifications
+          navigate(`/messages`);
+        }
         break;
       case 'order':
-        navigate('/dashboard?tab=orders');
+        if (notification.relatedId) {
+          navigate(`/orders/${notification.relatedId}`);
+        } else {
+          navigate('/orders');
+        }
         break;
       case 'listing':
-        navigate(`/listing/${notification.relatedId}`);
+        if (notification.relatedId) {
+          navigate(`/listing/${notification.relatedId}`);
+        } else {
+          navigate('/dashboard');
+        }
         break;
       default:
         break;

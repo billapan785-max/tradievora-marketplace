@@ -16,15 +16,15 @@ const Terms: React.FC = () => {
         {[
           {
             title: "1. Acceptance of Terms",
-            content: "By accessing or using Tradiora, you agree to be bound by these Terms of Service. If you do not agree to all of these terms, do not use our platform."
+            content: "By accessing or using Tradrox, you agree to be bound by these Terms of Service. If you do not agree to all of these terms, do not use our platform."
           },
           {
             title: "2. User Accounts",
-            content: "You are responsible for maintaining the security of your account and password. Tradiora cannot and will not be liable for any loss or damage from your failure to comply with this security obligation."
+            content: "You are responsible for maintaining the security of your account and password. Tradrox cannot and will not be liable for any loss or damage from your failure to comply with this security obligation."
           },
           {
             title: "3. Escrow System",
-            content: "All transactions on Tradiora must use our internal escrow system. Direct payments between buyers and sellers are strictly prohibited and will result in permanent account suspension."
+            content: "All transactions on Tradrox must use our internal escrow system. Direct payments between buyers and sellers are strictly prohibited and will result in permanent account suspension."
           },
           {
             title: "4. Prohibited Items",
@@ -32,11 +32,11 @@ const Terms: React.FC = () => {
           },
           {
             title: "5. Fees and Payments",
-            content: "Tradiora charges a platform fee on every successful transaction. These fees are non-refundable. All payments are processed in USDT (Tether)."
+            content: "Tradrox charges a platform fee on every successful transaction. These fees are non-refundable. All payments are processed in USDT (Tether)."
           },
           {
             title: "6. Dispute Resolution",
-            content: "In the event of a dispute, Tradiora administrators will act as mediators. Their decision is final and binding for both parties."
+            content: "In the event of a dispute, Tradrox administrators will act as mediators. Their decision is final and binding for both parties."
           }
         ].map((section, i) => (
           <div key={i} className="bg-zinc-900 border border-zinc-800 p-8 rounded-3xl">
@@ -51,7 +51,7 @@ const Terms: React.FC = () => {
         <div>
           <h3 className="text-white font-bold mb-2">Important Notice</h3>
           <p className="text-sm text-zinc-400 leading-relaxed">
-            Tradiora is a marketplace platform. We do not own the accounts or services listed by sellers. 
+            Tradrox is a marketplace platform. We do not own the accounts or services listed by sellers. 
             While we provide escrow protection, users are encouraged to perform their own due diligence before making a purchase.
           </p>
         </div>
