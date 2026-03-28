@@ -111,20 +111,28 @@ const Dashboard: React.FC = () => {
       }
 
       const listingData: any = {
-        ...newListing,
+        title: newListing.title,
+        description: newListing.description,
+        category: newListing.category,
+        deliveryMethod: newListing.deliveryMethod,
+        deliveryTime: newListing.deliveryTime,
+        serviceType: newListing.serviceType,
         price: parseFloat(newListing.price) || 0,
         originalPrice: parseFloat(newListing.originalPrice) || 0,
         discountedPrice: parseFloat(newListing.discountedPrice) || 0,
         isFlashSale: newListing.isFlashSale,
-        flashSaleEndsAt: newListing.flashSaleEndsAt || null,
         sellerId: profile.uid,
-        sellerName: profile.displayName,
+        sellerName: profile.displayName || 'Unknown Seller',
         sellerIsVerified: profile.isVerified || false,
         status: 'active',
         isFeatured: newListing.isFeatured,
         createdAt: new Date().toISOString(),
         image_url: imageUrl
       };
+
+      if (newListing.isFlashSale && newListing.flashSaleEndsAt) {
+        listingData.flashSaleEndsAt = newListing.flashSaleEndsAt;
+      }
       
       if (newListing.serviceType === 'percentage' || newListing.serviceType === 'refund_percentage') {
         listingData.percentageRate = parseFloat(newListing.percentageRate) || 0;
@@ -194,16 +202,25 @@ const Dashboard: React.FC = () => {
       }
 
       const listingData: any = {
-        ...newListing,
+        title: newListing.title,
+        description: newListing.description,
+        category: newListing.category,
+        deliveryMethod: newListing.deliveryMethod,
+        deliveryTime: newListing.deliveryTime,
+        serviceType: newListing.serviceType,
         price: parseFloat(newListing.price) || 0,
         originalPrice: parseFloat(newListing.originalPrice) || 0,
         discountedPrice: parseFloat(newListing.discountedPrice) || 0,
         isFlashSale: newListing.isFlashSale,
-        flashSaleEndsAt: newListing.flashSaleEndsAt || null,
-        image_url: imageUrl,
+        isFeatured: newListing.isFeatured,
+        image_url: imageUrl || '',
         updatedAt: new Date().toISOString()
       };
 
+      if (newListing.isFlashSale && newListing.flashSaleEndsAt) {
+        listingData.flashSaleEndsAt = newListing.flashSaleEndsAt;
+      }
+      
       if (newListing.serviceType === 'percentage' || newListing.serviceType === 'refund_percentage') {
         listingData.percentageRate = parseFloat(newListing.percentageRate) || 0;
       }
