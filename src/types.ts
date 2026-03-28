@@ -17,6 +17,7 @@ export interface UserProfile {
   image_url?: string;
   createdAt: string;
   lastSeen?: string;
+  fcmToken?: string | null;
 }
 
 export interface PublicProfile {
@@ -29,6 +30,7 @@ export interface PublicProfile {
   image_url?: string;
   createdAt: string;
   lastSeen?: string;
+  fcmToken?: string | null;
 }
 
 // ... existing interfaces ...

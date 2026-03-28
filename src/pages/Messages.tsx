@@ -3,7 +3,7 @@ import { collection, query, where, onSnapshot, addDoc, orderBy, doc, getDoc, set
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { useAuth } from '../AuthContext';
 import { Message, Order, Listing, UserProfile } from '../types';
-import { Send, User, Shield, AlertCircle, Paperclip, FileText, Image as ImageIcon, Video, X } from 'lucide-react';
+import { Send, User, Shield, AlertCircle, Paperclip, FileText, Image as ImageIcon, Video, X, MessageSquare } from 'lucide-react';
 import { useSearchParams, useNavigate, Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { uploadFile } from '../lib/upload';
@@ -31,42 +31,7 @@ const Messages: React.FC = () => {
   const navigate = useNavigate();
 
   const [conversations, setConversations] = useState<any[]>([]);
-
-  useEffect(() => {
-    if (!profile) return;
-
-    if (!orderId && !listingId) {
-      const q = query(
-        collection(db, 'messages'),
-        where('participants', 'array-contains', profile.uid),
-        orderBy('createdAt', 'desc')
-      );
-
-      const unsubscribe = onSnapshot(q, (snapshot) => {
-        const allMessages = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Message));
-        
-        // Group by orderId or listingId
-        const grouped: { [key: string]: Message[] } = {};
-        allMessages.forEach(msg => {
-          const key = msg.orderId || msg.listingId || 'unknown';
-          if (!grouped[key]) grouped[key] = [];
-          grouped[key].push(msg);
-        });
-
-        setConversations(Object.entries(grouped).map(([key, msgs]) => ({
-          id: key,
-          lastMessage: msgs[0],
-          type: msgs[0].orderId ? 'order' : 'listing'
-        })));
-        setLoading(false);
-      }, (error) => {
-        handleFirestoreError(error, OperationType.LIST, 'messages');
-        setLoading(false);
-      });
-
-      return () => unsubscribe();
-    }
-  }, [orderId, listingId, profile?.uid]);
+  const [loadingConversations, setLoadingConversations] = useState(false);
 
   const updateTypingStatus = async (isTyping: boolean) => {
     if (!profile || (!orderId && !listingId)) return;
@@ -118,6 +83,10 @@ const Messages: React.FC = () => {
   };
 
   const uploadVoiceMessage = async (blob: Blob) => {
+    if (orderId && !order) {
+      toast.error('Order data still loading. Please wait.');
+      return;
+    }
     setUploading(true);
     try {
       const formData = new FormData();
@@ -154,6 +123,21 @@ const Messages: React.FC = () => {
       }
 
       await addDoc(collection(db, 'messages'), messageData);
+      
+      // Send notification
+      const otherId = orderId 
+        ? (order?.buyerId === profile?.uid ? order?.sellerId : order?.buyerId)
+        : sellerId;
+      
+      if (otherId) {
+        sendNotification({
+          toId: otherId,
+          title: `New Voice Message from ${profile?.displayName}`,
+          body: 'Sent a voice message',
+          data: { type: 'message', id: orderId || listingId || '' }
+        });
+      }
+
       toast.success('Voice message sent');
     } catch (error) {
       console.error(error);
@@ -164,7 +148,73 @@ const Messages: React.FC = () => {
   };
 
   useEffect(() => {
-    if (!orderId && !listingId) return;
+    if (!profile?.uid || orderId || listingId) return;
+
+    setLoadingConversations(true);
+    const q = query(
+      collection(db, 'messages'),
+      where('participants', 'array-contains', profile.uid),
+      orderBy('createdAt', 'desc')
+    );
+
+    const unsubscribe = onSnapshot(q, async (snapshot) => {
+      const allMessages = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Message));
+      
+      // Group by orderId or listingId
+      const grouped: { [key: string]: Message } = {};
+      allMessages.forEach(msg => {
+        const key = msg.orderId || msg.listingId || 'direct';
+        if (!grouped[key]) {
+          grouped[key] = msg;
+        }
+      });
+
+      const convos = await Promise.all(Object.values(grouped).map(async (lastMsg) => {
+        const otherId = lastMsg.participants.find(id => id !== profile.uid);
+        let otherUser: UserProfile | null = null;
+        if (otherId) {
+          const userSnap = await getDoc(doc(db, 'profiles', otherId));
+          if (userSnap.exists()) {
+            otherUser = { uid: userSnap.id, ...userSnap.data() } as UserProfile;
+          }
+        }
+
+        let title = 'Conversation';
+        if (lastMsg.orderId) {
+          const orderSnap = await getDoc(doc(db, 'orders', lastMsg.orderId));
+          if (orderSnap.exists()) {
+            title = `Order #${orderSnap.id.slice(-6)}`;
+          }
+        } else if (lastMsg.listingId) {
+          const listingSnap = await getDoc(doc(db, 'listings', lastMsg.listingId));
+          if (listingSnap.exists()) {
+            title = listingSnap.data().title;
+          }
+        }
+
+        return {
+          id: lastMsg.id,
+          lastMessage: lastMsg,
+          otherUser,
+          title,
+          orderId: lastMsg.orderId,
+          listingId: lastMsg.listingId
+        };
+      }));
+
+      setConversations(convos);
+      setLoadingConversations(false);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'messages');
+      setLoadingConversations(false);
+    });
+
+    return () => unsubscribe();
+  }, [profile?.uid, orderId, listingId]);
+
+  useEffect(() => {
+    if (!profile?.uid || (!orderId && !listingId)) return;
+    setLoading(true);
 
     if (orderId) {
       const fetchOrder = async () => {
@@ -224,8 +274,28 @@ const Messages: React.FC = () => {
       setLoading(false);
     });
 
-    return () => unsubscribe();
-  }, [orderId, listingId, profile?.uid]);
+    // Listen for other user's typing status
+    const otherId = orderId 
+      ? (order?.buyerId === profile?.uid ? order?.sellerId : order?.buyerId)
+      : sellerId;
+    
+    let unsubTyping = () => {};
+    if (otherId) {
+      const typingQ = query(
+        collection(db, 'typing_status'),
+        where('userId', '==', otherId),
+        where(orderId ? 'orderId' : 'listingId', '==', orderId || listingId)
+      );
+      unsubTyping = onSnapshot(typingQ, (snapshot) => {
+        setIsOtherUserTyping(!snapshot.empty);
+      });
+    }
+
+    return () => {
+      unsubscribe();
+      unsubTyping();
+    };
+  }, [orderId, listingId, profile?.uid, order, sellerId]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -235,6 +305,10 @@ const Messages: React.FC = () => {
 
   const handleFileUpload = async (file: File | undefined) => {
     if (!file || !profile || (!orderId && !listingId)) return;
+    if (orderId && !order) {
+      toast.error('Order data still loading. Please wait.');
+      return;
+    }
 
     setUploading(true);
     try {
@@ -275,7 +349,7 @@ const Messages: React.FC = () => {
       
       // Send notification to the other user
       const otherId = orderId 
-        ? (order.buyerId === profile.uid ? order.sellerId : order.buyerId)
+        ? (order?.buyerId === profile?.uid ? order?.sellerId : order?.buyerId)
         : sellerId;
       
       if (otherId) {
@@ -358,32 +432,62 @@ const Messages: React.FC = () => {
   if (!orderId && !listingId) {
     return (
       <div className="w-full h-[calc(100vh-64px)] md:h-[calc(100vh-180px)] md:max-w-4xl md:mx-auto md:rounded-3xl flex flex-col bg-zinc-900 border border-zinc-800 overflow-hidden shadow-2xl relative">
-        <div className="p-6 border-b border-zinc-800">
-          <h2 className="text-2xl font-bold text-white">Messages</h2>
+        <div className="p-6 border-b border-zinc-800 flex items-center justify-between">
+          <h2 className="text-2xl font-bold text-white flex items-center gap-3">
+            <MessageSquare className="h-6 w-6 text-orange-500" />
+            Messages
+          </h2>
         </div>
-        <div className="flex-1 overflow-y-auto">
-          {conversations.length === 0 ? (
-            <div className="text-center py-20 text-zinc-500">No messages yet.</div>
-          ) : (
-            conversations.map((conv) => (
-              <Link
-                key={conv.id}
-                to={`/messages?${conv.type}=${conv.id}`}
-                className="block p-4 border-b border-zinc-800 hover:bg-zinc-800 transition-colors"
+
+        <div className="flex-1 overflow-y-auto p-6 space-y-4">
+          {loadingConversations ? (
+            <div className="flex items-center justify-center py-20">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500"></div>
+            </div>
+          ) : conversations.length > 0 ? (
+            conversations.map((convo) => (
+              <div
+                key={convo.id}
+                onClick={() => {
+                  if (convo.orderId) navigate(`/messages?order=${convo.orderId}`);
+                  else if (convo.listingId) navigate(`/messages?listing=${convo.listingId}${convo.otherUser ? `&seller=${convo.otherUser.uid}` : ''}`);
+                }}
+                className="bg-zinc-800/50 border border-zinc-700 p-4 rounded-2xl hover:border-orange-500/50 transition-all cursor-pointer group"
               >
-                <div className="flex justify-between items-center">
-                  <div className="text-white font-semibold">
-                    {conv.type === 'order' ? `Order #${conv.id.slice(-8)}` : `Listing Inquiry`}
+                <div className="flex items-center gap-4">
+                  <div className="h-12 w-12 rounded-full bg-zinc-700 flex items-center justify-center overflow-hidden">
+                    {convo.otherUser?.image_url ? (
+                      <img src={convo.otherUser.image_url} alt="" className="h-full w-full object-cover" />
+                    ) : (
+                      <User className="h-6 w-6 text-zinc-600" />
+                    )}
                   </div>
-                  <div className="text-xs text-zinc-500">
-                    {new Date(conv.lastMessage.createdAt).toLocaleDateString()}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between mb-1">
+                      <h3 className="text-white font-medium truncate group-hover:text-orange-500 transition-colors">
+                        {convo.title}
+                      </h3>
+                      <span className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">
+                        {new Date(convo.lastMessage.createdAt).toLocaleDateString()}
+                      </span>
+                    </div>
+                    <p className="text-zinc-400 text-sm truncate">
+                      {convo.otherUser?.displayName || 'User'}: {convo.lastMessage.type === 'text' ? convo.lastMessage.text : `Sent a ${convo.lastMessage.type}`}
+                    </p>
                   </div>
                 </div>
-                <div className="text-sm text-zinc-400 truncate mt-1">
-                  {conv.lastMessage.text || 'Sent a file/voice message'}
-                </div>
-              </Link>
+              </div>
             ))
+          ) : (
+            <div className="text-center py-20">
+              <div className="bg-zinc-800/50 h-20 w-20 rounded-full flex items-center justify-center mx-auto mb-4 border border-zinc-700">
+                <MessageSquare className="h-10 w-10 text-zinc-600" />
+              </div>
+              <h3 className="text-white font-medium mb-2">No conversations yet</h3>
+              <p className="text-zinc-500 text-sm max-w-xs mx-auto">
+                When you start chatting with sellers or buyers, your conversations will appear here.
+              </p>
+            </div>
           )}
         </div>
       </div>

@@ -36,7 +36,7 @@ service cloud.firestore {
     // Fields: userId, amount, walletAddress, status, createdAt
     //
     // Collection: messages
-    // Fields: orderId, senderId, text, createdAt
+    // Fields: orderId, listingId, senderId, text, audio, url, type, participants, createdAt
     //
     // Collection: reviews
     // Fields: orderId, fromId, toId, fromName, rating, comment, type, createdAt
@@ -76,25 +76,8 @@ service cloud.firestore {
     function isAdmin() {
       return isSystemAdmin() || 
              (isAuthenticated() && 
-              exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+              exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
               get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
-    }
-
-    function isValidNotification(data) {
-      return hasOnlyAllowedFields(['userId', 'title', 'body', 'type', 'relatedId', 'read', 'createdAt']) &&
-             data.userId is string &&
-             data.title is string && data.title.size() < 200 &&
-             data.body is string && data.body.size() < 1000 &&
-             data.type in ['message', 'order', 'listing', 'system'] &&
-             (!('relatedId' in data) || (data.relatedId == null || data.relatedId is string)) &&
-             data.read is bool &&
-             data.createdAt is string;
-    }
-
-    function isSuspended() {
-      return isAuthenticated() && 
-        exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('isSuspended', false) == true;
     }
 
     function hasOnlyAllowedFields(fields) {
@@ -105,27 +88,260 @@ service cloud.firestore {
       return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
     }
 
+    function isSuspended() {
+      return isAuthenticated() && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('isSuspended', false) == true;
+    }
+
+    function isValidUser(data) {
+      return hasOnlyAllowedFields(['uid', 'email', 'role', 'availableBalance', 'escrowBalance', 'withdrawableBalance', 'isSuspended', 'isVerified', 'referrerId', 'referralChain', 'createdAt', 'updatedAt', 'lastSeen', 'responseTime', 'trustScore', 'image_url', 'displayName', 'fcmToken', 'wallet', 'totalEarnings', 'totalReferrals', 'totalSales', 'totalVolume', 'levelEarnings', 'rank', 'pendingEarnings', 'bio', 'location', 'website']) &&
+             data.uid is string &&
+             isValidEmail(data.email) &&
+             data.role in ['buyer', 'seller', 'influencer', 'admin'] &&
+             data.availableBalance is number &&
+             data.escrowBalance is number &&
+             data.withdrawableBalance is number &&
+             data.isSuspended is bool &&
+             data.isVerified is bool &&
+             (!('referrerId' in data) || (data.referrerId == null || data.referrerId is string)) &&
+             (!('referralChain' in data) || data.referralChain is list) &&
+             data.createdAt is string &&
+             (!('updatedAt' in data) || data.updatedAt is string) &&
+             (!('lastSeen' in data) || data.lastSeen is string) &&
+             (!('responseTime' in data) || (data.responseTime is string && data.responseTime.size() < 100)) &&
+             data.trustScore is number &&
+             (!('image_url' in data) || (data.image_url is string && data.image_url.size() < 2000)) &&
+             (!('displayName' in data) || (data.displayName is string && data.displayName.size() < 200)) &&
+             (!('fcmToken' in data) || (data.fcmToken is string || data.fcmToken == null)) &&
+             (!('wallet' in data) || data.wallet is string) &&
+             (!('totalEarnings' in data) || data.totalEarnings is number) &&
+             (!('totalReferrals' in data) || data.totalReferrals is number) &&
+             (!('totalSales' in data) || data.totalSales is number) &&
+             (!('totalVolume' in data) || data.totalVolume is number) &&
+             (!('levelEarnings' in data) || data.levelEarnings is map) &&
+             (!('rank' in data) || data.rank is string) &&
+             (!('pendingEarnings' in data) || data.pendingEarnings is number) &&
+             (!('bio' in data) || (data.bio is string && data.bio.size() < 1000)) &&
+             (!('location' in data) || (data.location is string && data.location.size() < 200)) &&
+             (!('website' in data) || (data.website is string && data.website.size() < 500));
+    }
+
+    function isValidProfile(data) {
+      return hasOnlyAllowedFields(['uid', 'displayName', 'image_url', 'role', 'isVerified', 'responseTime', 'trustScore', 'createdAt', 'updatedAt', 'lastSeen', 'fcmToken', 'bio', 'location', 'website']) &&
+             data.uid is string &&
+             data.displayName is string && data.displayName.size() < 200 &&
+             (!('image_url' in data) || (data.image_url is string && data.image_url.size() < 2000)) &&
+             data.role in ['buyer', 'seller', 'influencer', 'admin'] &&
+             data.isVerified is bool &&
+             data.trustScore is number &&
+             (!('responseTime' in data) || (data.responseTime is string && data.responseTime.size() < 100)) &&
+             data.createdAt is string &&
+             (!('updatedAt' in data) || data.updatedAt is string) &&
+             (!('lastSeen' in data) || data.lastSeen is string) &&
+             (!('fcmToken' in data) || (data.fcmToken is string || data.fcmToken == null)) &&
+             (!('bio' in data) || (data.bio is string && data.bio.size() < 1000)) &&
+             (!('location' in data) || (data.location is string && data.location.size() < 200)) &&
+             (!('website' in data) || (data.website is string && data.website.size() < 500));
+    }
+
+    function isValidListing(data) {
+      return hasOnlyAllowedFields(['sellerId', 'sellerName', 'sellerIsVerified', 'title', 'description', 'price', 'originalPrice', 'discountedPrice', 'isFlashSale', 'flashSaleEndsAt', 'category', 'deliveryMethod', 'deliveryTime', 'status', 'isFeatured', 'createdAt', 'updatedAt', 'serviceType', 'percentageRate', 'minRefundAmount', 'maxRefundAmount', 'securityDepositAmount', 'requireSellerApproval', 'vaMonthlyPrice', 'vaSalesPercentage', 'image_url']) &&
+             data.sellerId is string &&
+             (!('sellerName' in data) || data.sellerName is string) &&
+             (!('sellerIsVerified' in data) || data.sellerIsVerified is bool) &&
+             data.title is string && data.title.size() < 200 &&
+             data.description is string && data.description.size() < 5000 &&
+             data.price is number &&
+             (!('originalPrice' in data) || data.originalPrice is number) &&
+             (!('discountedPrice' in data) || data.discountedPrice is number) &&
+             (!('isFlashSale' in data) || data.isFlashSale is bool) &&
+             (!('flashSaleEndsAt' in data) || data.flashSaleEndsAt is string) &&
+             data.category is string &&
+             data.deliveryMethod is string &&
+             data.deliveryTime is string &&
+             data.status in ['active', 'inactive', 'pending', 'rejected'] &&
+             data.isFeatured is bool &&
+             data.createdAt is string &&
+             (!('updatedAt' in data) || data.updatedAt is string) &&
+             (!('serviceType' in data) || data.serviceType is string) &&
+             (!('percentageRate' in data) || data.percentageRate is number) &&
+             (!('minRefundAmount' in data) || data.minRefundAmount is number) &&
+             (!('maxRefundAmount' in data) || data.maxRefundAmount is number) &&
+             (!('securityDepositAmount' in data) || data.securityDepositAmount is number) &&
+             (!('requireSellerApproval' in data) || data.requireSellerApproval is bool) &&
+             (!('vaMonthlyPrice' in data) || data.vaMonthlyPrice is number) &&
+             (!('vaSalesPercentage' in data) || data.vaSalesPercentage is number) &&
+             (!('image_url' in data) || (data.image_url is string && data.image_url.size() < 2000));
+    }
+
+    function isValidOrder(data) {
+      return hasOnlyAllowedFields(['buyerId', 'sellerId', 'listingId', 'listingTitle', 'amount', 'escrowFee', 'featuredFee', 'status', 'orderType', 'deliveryDetails', 'disputeReason', 'adminDecision', 'createdAt', 'updatedAt']) &&
+             data.buyerId is string &&
+             data.sellerId is string &&
+             data.listingId is string &&
+             (!('listingTitle' in data) || data.listingTitle is string) &&
+             data.amount is number &&
+             data.escrowFee is number &&
+             (!('featuredFee' in data) || data.featuredFee is number) &&
+             data.status in ['pending', 'active', 'delivered', 'completed', 'disputed', 'cancelled', 'refunded', 'pending_seller_approval'] &&
+             data.orderType in ['standard', 'va', 'escrow', 'fixed', 'percentage_work', 'percentage_refund', 'security_deposit', 'va_service'] &&
+             (!('deliveryDetails' in data) || data.deliveryDetails is string) &&
+             (!('disputeReason' in data) || data.disputeReason is string) &&
+             (!('adminDecision' in data) || data.adminDecision is string) &&
+             data.createdAt is string &&
+             (!('updatedAt' in data) || data.updatedAt is string);
+    }
+
     function isValidReview(data) {
       return hasOnlyAllowedFields(['orderId', 'fromId', 'toId', 'fromName', 'rating', 'comment', 'type', 'createdAt']) &&
              data.orderId is string &&
              data.fromId is string &&
              data.toId is string &&
-             (!('fromName' in data) || (data.fromName is string && data.fromName.size() < 100)) &&
+             (!('fromName' in data) || (data.fromName is string && data.fromName.size() < 200)) &&
              data.rating is number && data.rating >= 1 && data.rating <= 5 &&
-             data.comment is string && data.comment.size() < 1000 &&
+             data.comment is string && data.comment.size() < 2000 &&
              data.type in ['buyer_to_seller', 'seller_to_buyer'] &&
              data.createdAt is string;
     }
 
-    function isValidProfile(data) {
-      return hasOnlyAllowedFields(['uid', 'displayName', 'image_url', 'role', 'isVerified', 'responseTime', 'trustScore', 'createdAt']) &&
+    function isValidNotification(data) {
+      return hasOnlyAllowedFields(['userId', 'title', 'body', 'type', 'relatedId', 'read', 'createdAt']) &&
+             data.userId is string &&
+             data.title is string && data.title.size() < 200 &&
+             data.body is string && data.body.size() < 2000 &&
+             data.type in ['message', 'order', 'listing', 'system'] &&
+             (!('relatedId' in data) || (data.relatedId == null || data.relatedId is string)) &&
+             data.read is bool &&
+             data.createdAt is string;
+    }
+
+    function isValidVideo(data) {
+      return hasOnlyAllowedFields(['id', 'influencerId', 'influencerName', 'url', 'title', 'platform', 'description', 'views', 'bonusEarned', 'referralSales', 'status', 'bonusStatus', 'createdAt', 'updatedAt', 'rejectionReason', 'approvedAt']) &&
+             data.id is string &&
+             data.influencerId is string &&
+             data.influencerName is string &&
+             data.url is string &&
+             data.title is string &&
+             data.platform in ['tiktok', 'instagram', 'youtube', 'facebook'] &&
+             (!('description' in data) || data.description is string) &&
+             data.views is number &&
+             data.bonusEarned is number &&
+             data.referralSales is number &&
+             data.status in ['pending', 'approved', 'rejected'] &&
+             data.bonusStatus in ['pending', 'paid', 'none'] &&
+             data.createdAt is string &&
+             (!('updatedAt' in data) || data.updatedAt is string);
+    }
+
+    function isValidInfluencer(data) {
+      return hasOnlyAllowedFields(['uid', 'username', 'totalReferrals', 'totalSales', 'totalVolume', 'totalEarnings', 'pendingEarnings', 'withdrawnBalance', 'clicks', 'rank', 'levelEarnings']) &&
              data.uid is string &&
-             data.displayName is string && data.displayName.size() < 100 &&
-             (!('image_url' in data) || (data.image_url is string && data.image_url.size() < 2000)) &&
-             data.role in ['buyer', 'seller', 'influencer', 'admin'] &&
-             data.isVerified is bool &&
-             data.trustScore is number &&
-             (!('responseTime' in data) || (data.responseTime is string && data.responseTime.size() < 50)) &&
+             data.username is string &&
+             data.totalReferrals is number &&
+             data.totalSales is number &&
+             data.totalVolume is number &&
+             data.totalEarnings is number &&
+             data.pendingEarnings is number &&
+             data.withdrawnBalance is number &&
+             data.clicks is number &&
+             data.rank in ['Bronze', 'Silver', 'Gold', 'Platinum', 'VIP'] &&
+             data.levelEarnings is map;
+    }
+
+    function isValidDeposit(data) {
+      return hasOnlyAllowedFields(['userId', 'userEmail', 'amount', 'txid', 'network', 'status', 'adminNote', 'createdAt']) &&
+             data.userId is string &&
+             (!('userEmail' in data) || isValidEmail(data.userEmail)) &&
+             data.amount is number &&
+             data.txid is string &&
+             data.network in ['TRC20', 'ERC20', 'BEP20'] &&
+             data.status in ['pending', 'approved', 'rejected'] &&
+             (!('adminNote' in data) || data.adminNote is string) &&
+             data.createdAt is string;
+    }
+
+    function isValidWithdrawal(data) {
+      return hasOnlyAllowedFields(['userId', 'userEmail', 'amount', 'walletAddress', 'network', 'status', 'createdAt']) &&
+             data.userId is string &&
+             (!('userEmail' in data) || isValidEmail(data.userEmail)) &&
+             data.amount is number &&
+             data.walletAddress is string &&
+             data.network in ['TRC20', 'ERC20', 'BEP20'] &&
+             data.status in ['pending', 'completed', 'rejected'] &&
+             data.createdAt is string;
+    }
+
+    function isValidMessage(data) {
+      return hasOnlyAllowedFields(['id', 'orderId', 'listingId', 'senderId', 'text', 'type', 'url', 'audio', 'createdAt', 'participants', 'status']) &&
+             (!('id' in data) || data.id is string) &&
+             (!('orderId' in data) || (data.orderId == null || data.orderId is string)) &&
+             (!('listingId' in data) || (data.listingId == null || data.listingId is string)) &&
+             data.senderId is string &&
+             (!('text' in data) || data.text is string) &&
+             data.type in ['text', 'image', 'video', 'file', 'voice'] &&
+             (!('url' in data) || data.url is string) &&
+             (!('audio' in data) || data.audio is string) &&
+             data.createdAt is string &&
+             data.participants is list &&
+             (!('status' in data) || data.status in ['sent', 'delivered', 'seen']);
+    }
+
+    function isValidSupportTicket(data) {
+      return hasOnlyAllowedFields(['id', 'userId', 'userEmail', 'userName', 'lastMessage', 'status', 'unreadByAdmin', 'unreadByUser', 'createdAt', 'updatedAt']) &&
+             data.id is string &&
+             data.userId is string &&
+             isValidEmail(data.userEmail) &&
+             data.userName is string &&
+             data.lastMessage is string &&
+             data.status in ['open', 'closed'] &&
+             data.unreadByAdmin is bool &&
+             data.unreadByUser is bool &&
+             data.createdAt is string &&
+             data.updatedAt is string;
+    }
+
+    function isValidSupportMessage(data) {
+      return hasOnlyAllowedFields(['id', 'ticketId', 'senderId', 'text', 'createdAt']) &&
+             (!('id' in data) || data.id is string) &&
+             data.ticketId is string &&
+             data.senderId is string &&
+             data.text is string &&
+             data.createdAt is string;
+    }
+
+    function isValidDispute(data) {
+      return hasOnlyAllowedFields(['id', 'orderId', 'buyerId', 'sellerId', 'reason', 'status', 'adminDecision', 'adminReason', 'createdAt', 'updatedAt']) &&
+             data.id is string &&
+             data.orderId is string &&
+             data.buyerId is string &&
+             data.sellerId is string &&
+             data.reason in ['seller_not_delivered', 'wrong_account', 'refund_not_processed', 'buyer_scam', 'work_not_completed', 'access_revoked', 'other'] &&
+             data.status in ['open', 'resolved', 'closed'] &&
+             (!('adminDecision' in data) || data.adminDecision in ['release', 'refund', 'split', 'cancel']) &&
+             (!('adminReason' in data) || data.adminReason is string) &&
+             data.createdAt is string &&
+             data.updatedAt is string;
+    }
+
+    function isValidEvidence(data) {
+      return hasOnlyAllowedFields(['id', 'disputeId', 'userId', 'type', 'url', 'description', 'createdAt']) &&
+             (!('id' in data) || data.id is string) &&
+             data.disputeId is string &&
+             data.userId is string &&
+             data.type in ['screenshot', 'login_proof', 'video_proof', 'transaction_proof', 'refund_proof', 'appeal'] &&
+             data.url is string &&
+             (!('description' in data) || data.description is string) &&
+             data.createdAt is string;
+    }
+
+    function isValidTimeline(data) {
+      return hasOnlyAllowedFields(['id', 'orderId', 'type', 'description', 'userId', 'createdAt']) &&
+             (!('id' in data) || data.id is string) &&
+             data.orderId is string &&
+             data.type is string &&
+             data.description is string &&
+             (!('userId' in data) || data.userId is string) &&
              data.createdAt is string;
     }
 
@@ -134,17 +350,17 @@ service cloud.firestore {
     // ===============================================================
 
     match /users/{userId} {
-      // Allow authenticated users to get other users' profiles to support legacy data visibility.
-      // Note: This exposes email addresses to all logged-in users. 
-      // In production, sensitive data should be in a private subcollection.
-      allow get: if isAuthenticated();
+      // Protect PII: Only owner or admin can read the full user document.
+      allow get: if isOwner(userId) || isAdmin();
       allow list: if isAdmin();
       allow create: if isAuthenticated() && request.auth.uid == userId && 
+                      isValidUser(request.resource.data) &&
                       (request.resource.data.role in ['buyer', 'seller', 'influencer'] || isSystemAdmin());
       allow update: if isAuthenticated() && (
-        isAdmin() || 
+        (isAdmin() && isValidUser(request.resource.data)) || 
         (request.auth.uid == userId && 
-         // Prevent sensitive field changes
+         isValidUser(request.resource.data) &&
+         // Prevent sensitive field changes for non-admins
          request.resource.data.role == resource.data.role && 
          request.resource.data.isSuspended == resource.data.isSuspended &&
          request.resource.data.availableBalance == resource.data.availableBalance &&
@@ -163,22 +379,23 @@ service cloud.firestore {
 
     match /influencers/{influencerId} {
       allow read: if true;
-      allow create: if isAuthenticated() && request.auth.uid == influencerId;
+      allow create: if isAuthenticated() && request.auth.uid == influencerId && isValidInfluencer(request.resource.data);
       allow update: if isAdmin() || 
-                      (isAuthenticated() && request.auth.uid == influencerId) ||
+                      (isAuthenticated() && request.auth.uid == influencerId && isValidInfluencer(request.resource.data)) ||
                       (isAuthenticated() && 
                        request.resource.data.diff(resource.data).affectedKeys().hasAny(['totalReferrals', 'totalEarnings', 'totalSales', 'totalVolume', 'levelEarnings']) &&
-                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['totalReferrals', 'totalEarnings', 'totalSales', 'totalVolume', 'levelEarnings', 'rank', 'pendingEarnings']));
+                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['totalReferrals', 'totalEarnings', 'totalSales', 'totalVolume', 'levelEarnings', 'rank', 'pendingEarnings']) &&
+                       isValidInfluencer(request.resource.data));
     }
 
     match /referrals/{referralId} {
-      allow read: if isAdmin() || (isAuthenticated() && resource.data.influencerId == request.auth.uid);
+      allow read: if (isAuthenticated() && resource.data.influencerId == request.auth.uid) || isAdmin();
       allow create: if isAuthenticated();
       allow update: if isAdmin();
     }
 
     match /commissions/{commissionId} {
-      allow read: if isAdmin() || (isAuthenticated() && resource.data.influencerId == request.auth.uid);
+      allow read: if (isAuthenticated() && resource.data.influencerId == request.auth.uid) || isAdmin();
       allow create: if isAdmin() || isAuthenticated(); // Allow creation during order release
       allow update: if isAdmin();
     }
@@ -186,20 +403,23 @@ service cloud.firestore {
     match /videos/{videoId} {
       allow read: if true;
       allow create: if isAuthenticated() && !isSuspended() && 
-                      request.resource.data.influencerId == request.auth.uid;
-      allow update: if isAdmin() || (isAuthenticated() && !isSuspended() && 
-                      resource.data.influencerId == request.auth.uid);
+                      request.resource.data.influencerId == request.auth.uid &&
+                      isValidVideo(request.resource.data);
+      allow update: if (isAdmin() && isValidVideo(request.resource.data)) || 
+                      (isAuthenticated() && !isSuspended() && 
+                       resource.data.influencerId == request.auth.uid &&
+                       isValidVideo(request.resource.data));
     }
 
     match /listings/{listingId} {
       allow read: if true;
       allow create: if isAuthenticated() && !isSuspended() && 
                       request.resource.data.sellerId == request.auth.uid &&
-                      'image_url' in request.resource.data &&
-                      request.resource.data.image_url is string &&
-                      request.resource.data.image_url.size() > 0;
-      allow update: if isAdmin() || (isAuthenticated() && !isSuspended() && 
-                      resource.data.sellerId == request.auth.uid);
+                      isValidListing(request.resource.data);
+      allow update: if (isAdmin() && isValidListing(request.resource.data)) || 
+                      (isAuthenticated() && !isSuspended() && 
+                       resource.data.sellerId == request.auth.uid &&
+                       isValidListing(request.resource.data));
       allow delete: if isAdmin() || (isAuthenticated() && !isSuspended() && 
                       resource.data.sellerId == request.auth.uid);
     }
@@ -209,43 +429,52 @@ service cloud.firestore {
                                            request.auth.uid == resource.data.sellerId || 
                                            isAdmin());
       allow create: if isAuthenticated() && !isSuspended() && 
-                      request.resource.data.buyerId == request.auth.uid;
-      allow update: if isAdmin() || (isAuthenticated() && !isSuspended() && 
-                      (request.auth.uid == resource.data.buyerId || 
-                       request.auth.uid == resource.data.sellerId));
+                      request.resource.data.buyerId == request.auth.uid &&
+                      isValidOrder(request.resource.data);
+      allow update: if (isAdmin() && isValidOrder(request.resource.data)) || 
+                      (isAuthenticated() && !isSuspended() && 
+                       (request.auth.uid == resource.data.buyerId || 
+                        request.auth.uid == resource.data.sellerId) &&
+                       isValidOrder(request.resource.data));
     }
 
     match /deposits/{depositId} {
-      allow read: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+      allow read: if (isAuthenticated() && resource.data.userId == request.auth.uid) || isAdmin();
       allow create: if isAuthenticated() && !isSuspended() && 
                       request.resource.data.userId == request.auth.uid &&
+                      isValidDeposit(request.resource.data) &&
                       request.resource.data.status == 'pending';
-      allow update: if isAdmin();
+      allow update: if isAdmin() && isValidDeposit(request.resource.data);
     }
 
     match /withdrawals/{withdrawalId} {
-      allow read: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+      allow read: if (isAuthenticated() && resource.data.userId == request.auth.uid) || isAdmin();
       allow create: if isAuthenticated() && !isSuspended() && 
                       request.resource.data.userId == request.auth.uid &&
+                      isValidWithdrawal(request.resource.data) &&
                       request.resource.data.status == 'pending';
-      allow update: if isAdmin();
+      allow update: if isAdmin() && isValidWithdrawal(request.resource.data);
     }
 
     match /messages/{messageId} {
       allow read: if isAuthenticated() && (
-        isAdmin() ||
+        (resource.data.participants.hasAny([request.auth.uid])) ||
+        (resource.data.senderId == request.auth.uid) ||
         (resource.data.orderId != null && exists(/databases/$(database)/documents/orders/$(resource.data.orderId)) &&
          (get(/databases/$(database)/documents/orders/$(resource.data.orderId)).data.buyerId == request.auth.uid ||
           get(/databases/$(database)/documents/orders/$(resource.data.orderId)).data.sellerId == request.auth.uid)) ||
-        (resource.data.participants.hasAny([request.auth.uid]))
+        isAdmin()
       );
       allow create: if isAuthenticated() && !isSuspended() && 
                       request.resource.data.senderId == request.auth.uid &&
                       request.resource.data.participants.hasAny([request.auth.uid]) &&
-                      (!('text' in request.resource.data) || (
-                        !request.resource.data.text.matches(".*[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}.*") &&
-                        !request.resource.data.text.matches(".*(\\+?\\d{1,3}[- ]?)?\\d{10}.*")
-                      ));
+                      isValidMessage(request.resource.data) &&
+                      (
+                        !('text' in request.resource.data) || (
+                          !request.resource.data.text.matches(".*[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}.*") &&
+                          !request.resource.data.text.matches(".*(\\+?\\d{1,3}[- ]?)?\\d{10}.*")
+                        )
+                      );
     }
 
     match /reviews/{reviewId} {
@@ -261,13 +490,14 @@ service cloud.firestore {
     }
 
     match /support_tickets/{ticketId} {
-      allow read, update: if isAuthenticated() && (request.auth.uid == ticketId || isAdmin());
-      allow create: if isAuthenticated() && request.auth.uid == ticketId;
+      allow read: if isAuthenticated() && (request.auth.uid == ticketId || isAdmin());
+      allow create: if isAuthenticated() && request.auth.uid == ticketId && isValidSupportTicket(request.resource.data);
+      allow update: if isAuthenticated() && (request.auth.uid == ticketId || isAdmin()) && isValidSupportTicket(request.resource.data);
     }
 
     match /support_messages/{messageId} {
-      allow read: if isAuthenticated() && (request.auth.uid == resource.data.ticketId || isAdmin());
-      allow create: if isAuthenticated() && (request.auth.uid == request.resource.data.ticketId || isAdmin());
+      allow read: if isAuthenticated() && (exists(/databases/$(database)/documents/support_tickets/$(resource.data.ticketId)) && (get(/databases/$(database)/documents/support_tickets/$(resource.data.ticketId)).data.userId == request.auth.uid || isAdmin()));
+      allow create: if isAuthenticated() && (request.resource.data.senderId == request.auth.uid || isAdmin()) && isValidSupportMessage(request.resource.data);
     }
 
     match /settings/{settingId} {
@@ -290,13 +520,13 @@ service cloud.firestore {
 
     match /disputes/{disputeId} {
       allow read: if isAuthenticated() && (isAdmin() || request.auth.uid == resource.data.buyerId || request.auth.uid == resource.data.sellerId);
-      allow create: if isAuthenticated() && !isSuspended() && (request.resource.data.buyerId == request.auth.uid || request.resource.data.sellerId == request.auth.uid);
-      allow update: if isAdmin();
+      allow create: if isAuthenticated() && !isSuspended() && (request.resource.data.buyerId == request.auth.uid || request.resource.data.sellerId == request.auth.uid) && isValidDispute(request.resource.data);
+      allow update: if isAdmin() && isValidDispute(request.resource.data);
     }
 
     match /evidence/{evidenceId} {
       allow read: if isAuthenticated() && (isAdmin() || (exists(/databases/$(database)/documents/disputes/$(resource.data.disputeId)) && (get(/databases/$(database)/documents/disputes/$(resource.data.disputeId)).data.buyerId == request.auth.uid || get(/databases/$(database)/documents/disputes/$(resource.data.disputeId)).data.sellerId == request.auth.uid)));
-      allow create: if isAuthenticated() && !isSuspended() && (exists(/databases/$(database)/documents/disputes/$(request.resource.data.disputeId)) && (get(/databases/$(database)/documents/disputes/$(request.resource.data.disputeId)).data.buyerId == request.auth.uid || get(/databases/$(database)/documents/disputes/$(request.resource.data.disputeId)).data.sellerId == request.auth.uid));
+      allow create: if isAuthenticated() && !isSuspended() && (exists(/databases/$(database)/documents/disputes/$(request.resource.data.disputeId)) && (get(/databases/$(database)/documents/disputes/$(request.resource.data.disputeId)).data.buyerId == request.auth.uid || get(/databases/$(database)/documents/disputes/$(request.resource.data.disputeId)).data.sellerId == request.auth.uid)) && isValidEvidence(request.resource.data);
     }
 
     match /timeline/{eventId} {
@@ -306,7 +536,7 @@ service cloud.firestore {
         (exists(/databases/$(database)/documents/orders/$(request.resource.data.orderId)) && 
          (get(/databases/$(database)/documents/orders/$(request.resource.data.orderId)).data.buyerId == request.auth.uid || 
           get(/databases/$(database)/documents/orders/$(request.resource.data.orderId)).data.sellerId == request.auth.uid))
-      );
+      ) && isValidTimeline(request.resource.data);
     }
 
     match /notifications/{notificationId} {
@@ -320,7 +550,7 @@ service cloud.firestore {
     match /typing_status/{typingId} {
       allow read: if isAuthenticated();
       allow create, update: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
-      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow delete: if isAuthenticated() && (resource == null || resource.data.userId == request.auth.uid);
     }
   }
 }

@@ -47,7 +47,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         // Listen to profile changes
         const profileRef = doc(db, 'users', firebaseUser.uid);
-        await updateDoc(profileRef, { lastSeen: new Date().toISOString() });
+        
+        // Update lastSeen safely
+        getDoc(profileRef).then(snap => {
+          if (snap.exists()) {
+            updateDoc(profileRef, { 
+              lastSeen: new Date().toISOString(),
+              updatedAt: new Date().toISOString()
+            }).catch(err => console.error("Error updating lastSeen:", err));
+          }
+        });
         
         unsubProfile = onSnapshot(profileRef, async (docSnap) => {
           if (docSnap.exists()) {
@@ -57,7 +66,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             // Force admin role if email matches but role is not admin
             if (isAdminEmail && currentProfile.role !== 'admin') {
               try {
-                await setDoc(profileRef, { ...currentProfile, role: 'admin' }, { merge: true });
+                await setDoc(profileRef, { ...currentProfile, role: 'admin', updatedAt: new Date().toISOString() }, { merge: true });
               } catch (error) {
                 console.error("Failed to upgrade user to admin:", error);
               }
@@ -78,8 +87,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 trustScore: currentProfile.trustScore || 100,
                 responseTime: currentProfile.responseTime || '1h',
                 image_url: currentProfile.image_url || '',
-                createdAt: currentProfile.createdAt
+                fcmToken: currentProfile.fcmToken || null,
+                createdAt: currentProfile.createdAt,
+                updatedAt: new Date().toISOString(),
+                lastSeen: new Date().toISOString()
               });
+            } else {
+              // Sync lastSeen to public profile if it's been a while
+              const publicData = publicProfileSnap.data();
+              const lastSeen = publicData.lastSeen;
+              const now = new Date();
+              if (!lastSeen || (now.getTime() - new Date(lastSeen).getTime() > 300000)) { // 5 mins
+                updateDoc(publicProfileRef, { 
+                  lastSeen: now.toISOString(),
+                  updatedAt: now.toISOString()
+                }).catch(() => {});
+              }
             }
           } else {
             // Profile doesn't exist, create it
@@ -101,6 +124,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               }
             }
 
+            const now = new Date().toISOString();
             const newProfile: UserProfile = {
               uid: firebaseUser.uid,
               email: firebaseUser.email || '',
@@ -114,10 +138,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               trustScore: 100,
               responseTime: '1h',
               image_url: firebaseUser.photoURL || '',
+              fcmToken: null,
               referrerId: referrerId || null,
               referralChain: referralChain.length > 0 ? referralChain : [],
-              createdAt: new Date().toISOString(),
+              createdAt: now,
+              updatedAt: now,
+              lastSeen: now
             } as UserProfile;
+
             try {
               await setDoc(profileRef, newProfile);
               
@@ -130,7 +158,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 trustScore: 100,
                 responseTime: '1h',
                 image_url: newProfile.image_url,
-                createdAt: newProfile.createdAt
+                fcmToken: null,
+                createdAt: now,
+                updatedAt: now,
+                lastSeen: now
               });
               
               // If referred, create a referral record

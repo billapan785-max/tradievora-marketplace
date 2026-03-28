@@ -18,6 +18,9 @@ export const requestNotificationPermission = async () => {
         await updateDoc(doc(db, 'users', auth.currentUser.uid), {
           fcmToken: token
         });
+        await updateDoc(doc(db, 'profiles', auth.currentUser.uid), {
+          fcmToken: token
+        });
         console.log('FCM Token generated and saved:', token);
         return token;
       }
@@ -67,10 +70,10 @@ export const sendNotification = async ({ toId, title, body, data }: SendNotifica
     });
 
     // 2. Get the recipient's FCM token from Firestore
-    const userDoc = await getDoc(doc(db, 'users', toId));
-    if (!userDoc.exists()) return;
+    const profileDoc = await getDoc(doc(db, 'profiles', toId));
+    if (!profileDoc.exists()) return;
     
-    const fcmToken = userDoc.data()?.fcmToken;
+    const fcmToken = profileDoc.data()?.fcmToken;
     if (!fcmToken) return;
 
     // 3. Send the notification via Cloudflare Worker backend
@@ -103,15 +106,11 @@ export const sendNotification = async ({ toId, title, body, data }: SendNotifica
 
 export const notifyAllBuyers = async (title: string, body: string, data: { type: NotificationType; id: string }) => {
   try {
-    const buyersQuery = query(collection(db, 'users'), where('role', '==', 'buyer'));
+    const buyersQuery = query(collection(db, 'profiles'), where('role', '==', 'buyer'));
     const buyersSnapshot = await getDocs(buyersQuery);
     
     const notifications = buyersSnapshot.docs.map(doc => {
-      const fcmToken = doc.data().fcmToken;
-      if (fcmToken) {
-        return sendNotification({ toId: doc.id, title, body, data });
-      }
-      return null;
+      return sendNotification({ toId: doc.id, title, body, data });
     });
 
     await Promise.all(notifications);
