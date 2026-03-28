@@ -1,0 +1,33 @@
+{
+  "background_color": "#000000",
+  "dir": "ltr",
+  "display": "standalone",
+  "name": "Tradrox",
+  "orientation": "any",
+  "scope": "/",
+  "short_name": "Tradrox",
+  "start_url": "/",
+  "theme_color": "#f39108",
+  "icons": [
+    {
+      "src": "https://tradrox.com/favicon.ico",
+      "type": "image/x-icon",
+      "isSquare": false,
+      "isPng": false,
+      "isWebp": false,
+      "isJpg": false,
+      "width": 0,
+      "is512x512": false,
+      "is256x256": false,
+      "is192x192": false
+    }
+  ],
+  "id": "com.tradrox.app",
+  "description": "Buy and sell digital accounts safely. Tradrox marketplace for TikTok, Instagram, YouTube and gaming accounts with secure escrow, reviews and messaging.",
+  "lang": "en",
+  "categories": [
+    "business",
+    "shopping",
+    "social"
+  ]
+}
