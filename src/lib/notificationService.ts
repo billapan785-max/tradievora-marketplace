@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 
 // VAPID key is required for getToken. 
 // You can get this from Firebase Console -> Project Settings -> Cloud Messaging -> Web Push certificates
-const VAPID_KEY = process.env.VITE_FIREBASE_VAPID_KEY || '';
+const VAPID_KEY = (import.meta as any).env?.VITE_FIREBASE_VAPID_KEY || '';
 
 export const requestNotificationPermission = async () => {
   if (!messaging) return;
@@ -54,7 +54,7 @@ interface SendNotificationParams {
 }
 
 // Cloudflare Worker URL for sending notifications
-const NOTIFICATION_WORKER_URL = process.env.VITE_NOTIFICATION_WORKER_URL || '';
+const NOTIFICATION_WORKER_URL = (import.meta as any).env?.VITE_NOTIFICATION_WORKER_URL || '';
 
 export const sendNotification = async ({ toId, title, body, data }: SendNotificationParams) => {
   try {
@@ -96,7 +96,13 @@ export const sendNotification = async ({ toId, title, body, data }: SendNotifica
     });
 
     if (!response.ok) {
-      const errorData = await response.json();
+      const contentType = response.headers.get("content-type");
+      let errorData;
+      if (contentType && contentType.includes("application/json")) {
+        errorData = await response.json().catch(() => ({ error: "Failed to parse JSON error" }));
+      } else {
+        errorData = { error: await response.text().catch(() => "Unknown error") };
+      }
       console.error('Worker notification send error:', errorData);
     }
   } catch (error) {

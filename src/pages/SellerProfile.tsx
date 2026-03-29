@@ -4,6 +4,7 @@ import { doc, getDoc, collection, query, where, onSnapshot } from 'firebase/fire
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { Listing, UserProfile, Review } from '../types';
 import { Star, BadgeCheck, Clock, Shield, MessageSquare, Search, ArrowLeft } from 'lucide-react';
+import { getOptimizedImageUrl } from '../lib/imageUtils';
 import { useAuth } from '../AuthContext';
 import { setDoc } from 'firebase/firestore';
 
@@ -117,7 +118,7 @@ const SellerProfile: React.FC = () => {
           <div className="relative">
             {seller.image_url ? (
               <img 
-                src={seller.image_url} 
+                src={getOptimizedImageUrl(seller.image_url, 200)} 
                 alt={seller.displayName} 
                 className="h-32 w-32 rounded-[2.5rem] object-cover shadow-xl border border-zinc-700"
                 referrerPolicy="no-referrer"
@@ -189,10 +190,11 @@ const SellerProfile: React.FC = () => {
                   <div className="aspect-[4/3] relative overflow-hidden bg-zinc-800">
                     {listing.image_url ? (
                       <img 
-                        src={listing.image_url} 
+                        src={getOptimizedImageUrl(listing.image_url, 400)} 
                         alt={listing.title} 
                         className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
                         referrerPolicy="no-referrer"
+                        loading="lazy"
                       />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center">

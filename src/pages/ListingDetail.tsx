@@ -5,6 +5,7 @@ import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { Listing, UserProfile, Order, Review } from '../types';
 import { useAuth } from '../AuthContext';
 import { Shield, Clock, User, Star, CheckCircle, AlertCircle, ShoppingCart, BadgeCheck, MessageSquare } from 'lucide-react';
+import { getOptimizedImageUrl } from '../lib/imageUtils';
 import { toast } from 'sonner';
 import { sendNotification } from '../lib/notificationService';
 
@@ -193,11 +194,11 @@ const ListingDetail: React.FC = () => {
       {/* Left Column: Details */}
       <div className="lg:col-span-2 space-y-8">
         {listing.image_url && (
-          <div className="w-full h-[400px] rounded-3xl overflow-hidden bg-zinc-900 border border-zinc-800">
+          <div className="w-full h-64 md:h-[450px] rounded-3xl overflow-hidden bg-zinc-900 border border-zinc-800 flex items-center justify-center">
             <img 
-              src={listing.image_url} 
+              src={getOptimizedImageUrl(listing.image_url, 800)} 
               alt={listing.title} 
-              className="w-full h-full object-cover"
+              className="max-w-full max-h-full w-auto h-auto object-contain"
               referrerPolicy="no-referrer"
             />
           </div>

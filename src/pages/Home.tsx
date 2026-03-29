@@ -4,6 +4,7 @@ import { Shield, Zap, Lock, ArrowRight, Star, CheckCircle, MessageSquare } from 
 import { motion } from 'motion/react';
 import { collection, query, orderBy, limit, getDocs, doc, getDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
+import { getOptimizedImageUrl } from '../lib/imageUtils';
 import { PlatformSettings } from '../types';
 
 const Home: React.FC = () => {
@@ -49,7 +50,7 @@ const Home: React.FC = () => {
         <div className="absolute inset-0 bg-gradient-to-r from-orange-600 to-orange-900 z-0"></div>
         <div 
           className="absolute inset-0 bg-cover bg-center opacity-20 mix-blend-overlay z-0"
-          style={{ backgroundImage: `url(${settings?.bannerImageUrl || 'https://images.unsplash.com/photo-1639762681485-074b7f4ec651?q=80&w=2070&auto=format&fit=crop'})` }}
+          style={{ backgroundImage: `url(${getOptimizedImageUrl(settings?.bannerImageUrl || 'https://images.unsplash.com/photo-1639762681485-074b7f4ec651?q=80&w=2070&auto=format&fit=crop', 1200)})` }}
         ></div>
         <div className="relative z-10 text-center px-4">
           <h1 className="text-5xl md:text-7xl font-black text-white tracking-tighter uppercase drop-shadow-lg">

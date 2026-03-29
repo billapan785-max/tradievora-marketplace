@@ -4,6 +4,7 @@ import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { Listing, Review, PlatformSettings } from '../types';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { Search, Filter, Tag, Clock, User, Star, BadgeCheck, ChevronDown } from 'lucide-react';
+import { getOptimizedImageUrl } from '../lib/imageUtils';
 
 const Marketplace: React.FC = () => {
   const [listings, setListings] = useState<Listing[]>([]);
@@ -181,10 +182,11 @@ const Marketplace: React.FC = () => {
                   {listing.image_url && (
                     <div className="w-full h-32 md:h-48 overflow-hidden bg-zinc-800 relative">
                       <img 
-                        src={listing.image_url} 
+                        src={getOptimizedImageUrl(listing.image_url, 400)} 
                         alt={listing.title} 
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                         referrerPolicy="no-referrer"
+                        loading="lazy"
                       />
                       {/* Badges Overlay */}
                       <div className="absolute top-2 left-2 flex flex-wrap gap-1">

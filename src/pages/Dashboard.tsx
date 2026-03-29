@@ -4,6 +4,7 @@ import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { useAuth } from '../AuthContext';
 import { Listing, Order, PlatformSettings } from '../types';
 import { Plus, Package, ShoppingBag, TrendingUp, Edit, Trash2, ExternalLink, Shield, BadgeCheck } from 'lucide-react';
+import { getOptimizedImageUrl } from '../lib/imageUtils';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { uploadFile } from '../lib/upload';
@@ -482,7 +483,7 @@ const Dashboard: React.FC = () => {
                       <div className="flex items-center space-x-3">
                         {listing.image_url ? (
                           <div className="w-10 h-10 rounded-lg overflow-hidden bg-zinc-800 flex-shrink-0">
-                            <img src={listing.image_url} alt={listing.title} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                            <img src={getOptimizedImageUrl(listing.image_url, 200)} alt={listing.title} className="w-full h-full object-cover" referrerPolicy="no-referrer" loading="lazy" />
                           </div>
                         ) : (
                           <div className="w-10 h-10 rounded-lg bg-zinc-800 flex items-center justify-center flex-shrink-0">

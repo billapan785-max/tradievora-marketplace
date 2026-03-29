@@ -5,6 +5,7 @@ import { useAuth } from '../AuthContext';
 import { Message, Order, Listing, UserProfile } from '../types';
 import { Send, User, Shield, AlertCircle, Paperclip, FileText, Image as ImageIcon, Video, X, MessageSquare, Mic, Square } from 'lucide-react';
 import { useSearchParams, useNavigate, Link } from 'react-router-dom';
+import { getOptimizedImageUrl } from '../lib/imageUtils';
 import { toast } from 'sonner';
 import { uploadFile } from '../lib/upload';
 import { sendNotification } from '../lib/notificationService';
@@ -99,9 +100,20 @@ const Messages: React.FC = () => {
         body: formData,
       });
 
-      if (!response.ok) throw new Error('Upload failed');
-      const data = await response.json();
-      const audioUrl = data.url;
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => "Upload failed");
+        throw new Error(`Upload failed: ${errorText}`);
+      }
+
+      const contentType = response.headers.get("content-type");
+      let audioUrl = '';
+      if (contentType && contentType.includes("application/json")) {
+        const data = await response.json();
+        audioUrl = data.url;
+      } else {
+        const text = await response.text();
+        throw new Error(`Server returned non-JSON response: ${text.substring(0, 100)}`);
+      }
 
       const messageData: any = {
         senderId: profile?.uid,
@@ -459,7 +471,7 @@ const Messages: React.FC = () => {
                 <div className="flex items-center gap-4">
                   <div className="h-12 w-12 rounded-full bg-zinc-700 flex items-center justify-center overflow-hidden">
                     {convo.otherUser?.image_url ? (
-                      <img src={convo.otherUser.image_url} alt="" className="h-full w-full object-cover" />
+                      <img src={getOptimizedImageUrl(convo.otherUser.image_url, 100)} alt="" className="h-full w-full object-cover" />
                     ) : (
                       <User className="h-6 w-6 text-zinc-600" />
                     )}
@@ -566,7 +578,7 @@ const Messages: React.FC = () => {
               <div className="leading-relaxed break-words">
                 {msg.type === 'voice' && <audio controls src={msg.audio} className="max-w-full h-8 md:h-10" />}
                 {msg.type === 'text' && msg.text}
-                {msg.type === 'image' && <img src={msg.url} alt="Message" className="max-w-full rounded-lg" />}
+                {msg.type === 'image' && <img src={getOptimizedImageUrl(msg.url, 400)} alt="Message" className="max-w-full rounded-lg" loading="lazy" />}
                 {msg.type === 'video' && <video src={msg.url} controls className="max-w-full rounded-lg" />}
                 {msg.type === 'file' && (
                   <a href={msg.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-white underline">

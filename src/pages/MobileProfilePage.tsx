@@ -2,6 +2,7 @@ import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
 import { auth } from '../lib/firebase';
+import { getOptimizedImageUrl } from '../lib/imageUtils';
 import { Wallet, Package, MessageSquare, Star, Zap, Users, Settings, LogOut, Shield, ChevronRight } from 'lucide-react';
 import Footer from '../components/Footer';
 
@@ -19,9 +20,13 @@ const MobileProfilePage: React.FC = () => {
   return (
     <div className="sm:hidden pb-20 p-4">
       <div className="flex items-center space-x-4 mb-8">
-        <div className="h-16 w-16 bg-zinc-800 rounded-full flex items-center justify-center text-2xl font-bold text-orange-500">
-          {profile?.displayName?.charAt(0) || 'U'}
-        </div>
+        {profile?.image_url ? (
+          <img src={getOptimizedImageUrl(profile.image_url, 100)} alt={profile.displayName} className="h-16 w-16 rounded-full object-cover border border-zinc-700" referrerPolicy="no-referrer" />
+        ) : (
+          <div className="h-16 w-16 bg-zinc-800 rounded-full flex items-center justify-center text-2xl font-bold text-orange-500">
+            {profile?.displayName?.charAt(0) || 'U'}
+          </div>
+        )}
         <div>
           <h2 className="text-xl font-bold text-white">{profile?.displayName}</h2>
           <p className="text-zinc-400 text-sm">{profile?.role}</p>

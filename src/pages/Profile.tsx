@@ -4,6 +4,7 @@ import { doc, getDoc, collection, query, where, onSnapshot, updateDoc, setDoc } 
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { UserProfile, Review } from '../types';
 import { User, Star, Calendar, ShieldCheck, BadgeCheck, ShoppingBag, Award, Upload, Clock } from 'lucide-react';
+import { getOptimizedImageUrl } from '../lib/imageUtils';
 import { useAuth } from '../AuthContext';
 import { uploadFile } from '../lib/upload';
 import { toast } from 'sonner';
@@ -159,7 +160,7 @@ const Profile: React.FC = () => {
         <div className="flex flex-col items-center md:flex-row md:items-start gap-6 md:gap-8 relative z-10 w-full">
           <div className="relative shrink-0">
             {profile.image_url ? (
-              <img src={profile.image_url} alt={profile.displayName} className="h-24 w-24 md:h-32 md:w-32 rounded-2xl md:rounded-[32px] object-cover shadow-2xl border border-zinc-700" referrerPolicy="no-referrer" />
+              <img src={getOptimizedImageUrl(profile.image_url, 200)} alt={profile.displayName} className="h-24 w-24 md:h-32 md:w-32 rounded-2xl md:rounded-[32px] object-cover shadow-2xl border border-zinc-700" referrerPolicy="no-referrer" />
             ) : (
               <div className="h-24 w-24 md:h-32 md:w-32 bg-zinc-800 rounded-2xl md:rounded-[32px] flex items-center justify-center text-4xl md:text-5xl font-black text-orange-500 shadow-2xl border border-zinc-700">
                 {profile.displayName?.charAt(0) || profile.email.charAt(0).toUpperCase()}

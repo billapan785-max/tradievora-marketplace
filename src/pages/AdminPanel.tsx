@@ -5,6 +5,7 @@ import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { useAuth } from '../AuthContext';
 import { Deposit, Withdrawal, UserProfile, PlatformSettings, Order, Listing, InfluencerProfile, VideoPromotion, Commission, SupportTicket, SupportMessage, Dispute, Evidence, Message } from '../types';
 import { Shield, Users, CreditCard, Settings, Check, X, AlertCircle, TrendingUp, Video, DollarSign, Award, ExternalLink, MessageSquare, Send, User, BadgeCheck, Eye, Info, ArrowRight } from 'lucide-react';
+import { getOptimizedImageUrl } from '../lib/imageUtils';
 import { toast } from 'sonner';
 import { sendNotification } from '../lib/notificationService';
 
@@ -1019,7 +1020,7 @@ const AdminPanel: React.FC = () => {
                       <div className="flex items-center space-x-3">
                         {l.image_url ? (
                           <div className="w-10 h-10 rounded-lg overflow-hidden bg-zinc-800 flex-shrink-0">
-                            <img src={l.image_url} alt={l.title} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                            <img src={getOptimizedImageUrl(l.image_url, 100)} alt={l.title} className="w-full h-full object-cover" referrerPolicy="no-referrer" loading="lazy" />
                           </div>
                         ) : (
                           <div className="w-10 h-10 rounded-lg bg-zinc-800 flex items-center justify-center flex-shrink-0">
