@@ -313,12 +313,13 @@ service cloud.firestore {
     }
 
     function isValidDispute(data) {
-      return hasOnlyAllowedFields(['id', 'orderId', 'buyerId', 'sellerId', 'reason', 'status', 'adminDecision', 'adminReason', 'createdAt', 'updatedAt']) &&
-             data.id is string &&
+      return hasOnlyAllowedFields(['id', 'orderId', 'buyerId', 'sellerId', 'reason', 'proof_url', 'status', 'adminDecision', 'adminReason', 'createdAt', 'updatedAt']) &&
+             (!('id' in data) || data.id is string) &&
              data.orderId is string &&
              data.buyerId is string &&
              data.sellerId is string &&
-             data.reason in ['seller_not_delivered', 'wrong_account', 'refund_not_processed', 'buyer_scam', 'work_not_completed', 'access_revoked', 'other'] &&
+             data.reason is string &&
+             (!('proof_url' in data) || data.proof_url is string) &&
              data.status in ['open', 'resolved', 'closed'] &&
              (!('adminDecision' in data) || data.adminDecision in ['release', 'refund', 'split', 'cancel']) &&
              (!('adminReason' in data) || data.adminReason is string) &&

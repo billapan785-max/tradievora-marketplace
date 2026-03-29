@@ -91,8 +91,10 @@ const Messages: React.FC = () => {
     try {
       const formData = new FormData();
       formData.append('file', blob, 'voice-message.webm');
+      formData.append('folder', 'voice-messages');
+      formData.append('userId', profile?.uid || 'unknown');
 
-      const response = await fetch('https://fancy-tree-f711tradiora-upload.billapan785.workers.dev', {
+      const response = await fetch('/api/upload', {
         method: 'POST',
         body: formData,
       });

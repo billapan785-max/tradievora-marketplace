@@ -40,7 +40,8 @@ export interface Dispute {
   orderId: string;
   buyerId: string;
   sellerId: string;
-  reason: 'seller_not_delivered' | 'wrong_account' | 'refund_not_processed' | 'buyer_scam' | 'work_not_completed' | 'access_revoked' | 'other';
+  reason: string;
+  proof_url?: string;
   status: 'open' | 'resolved' | 'closed';
   adminDecision?: 'release' | 'refund' | 'split' | 'cancel';
   adminReason?: string;
