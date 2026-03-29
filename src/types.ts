@@ -264,4 +264,5 @@ export interface PlatformSettings {
   bannerTitle?: string;
   bannerSubtitle?: string;
   bannerImageUrl?: string;
+  categories?: string[];
 }

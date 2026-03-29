@@ -232,26 +232,30 @@ const ListingDetail: React.FC = () => {
           )}
 
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-6 mb-8">
-            <div className="bg-zinc-800/50 p-4 rounded-2xl border border-zinc-800">
-              <div className="text-zinc-500 text-xs mb-1 uppercase font-bold tracking-tighter">Price</div>
-              <div className="text-2xl font-bold text-white">
-                {listing.isFlashSale && listing.flashSaleEndsAt && new Date(listing.flashSaleEndsAt) > new Date() && listing.discountedPrice ? (
-                  listing.discountedPrice
-                ) : listing.discountedPrice ? (
-                  listing.discountedPrice
-                ) : (
-                  listing.price
-                )} <span className="text-sm font-normal text-zinc-500">USDT</span>
-              </div>
-              {(listing.originalPrice || (listing.discountedPrice && listing.price)) && (
-                <div className="text-xs text-zinc-500 line-through">
-                  {listing.originalPrice || listing.price} USDT
-                </div>
-              )}
-            </div>
-            {listing.serviceType === 'percentage' && (
+            {(listing.serviceType === 'fixed' || !listing.serviceType || listing.serviceType === 'va_service') && (
               <div className="bg-zinc-800/50 p-4 rounded-2xl border border-zinc-800">
-                <div className="text-zinc-500 text-xs mb-1 uppercase font-bold tracking-tighter">Percentage</div>
+                <div className="text-zinc-500 text-xs mb-1 uppercase font-bold tracking-tighter">
+                  {listing.serviceType === 'va_service' ? 'Monthly Price' : 'Price'}
+                </div>
+                <div className="text-2xl font-bold text-white">
+                  {listing.isFlashSale && listing.flashSaleEndsAt && new Date(listing.flashSaleEndsAt) > new Date() && listing.discountedPrice ? (
+                    listing.discountedPrice
+                  ) : listing.discountedPrice ? (
+                    listing.discountedPrice
+                  ) : (
+                    listing.price
+                  )} <span className="text-sm font-normal text-zinc-500">USDT</span>
+                </div>
+                {(listing.originalPrice || (listing.discountedPrice && listing.price)) && (
+                  <div className="text-xs text-zinc-500 line-through">
+                    {listing.originalPrice || listing.price} USDT
+                  </div>
+                )}
+              </div>
+            )}
+            {(listing.serviceType === 'percentage' || listing.serviceType === 'refund_percentage') && (
+              <div className="bg-zinc-800/50 p-4 rounded-2xl border border-zinc-800">
+                <div className="text-zinc-500 text-xs mb-1 uppercase font-bold tracking-tighter">Percentage Rate</div>
                 <div className="text-2xl font-bold text-white">{listing.percentageRate}%</div>
               </div>
             )}
@@ -263,14 +267,14 @@ const ListingDetail: React.FC = () => {
             )}
             {listing.serviceType === 'security_deposit' && (
               <div className="bg-zinc-800/50 p-4 rounded-2xl border border-zinc-800">
-                <div className="text-zinc-500 text-xs mb-1 uppercase font-bold tracking-tighter">Deposit</div>
+                <div className="text-zinc-500 text-xs mb-1 uppercase font-bold tracking-tighter">Security Deposit</div>
                 <div className="text-2xl font-bold text-white">{listing.securityDepositAmount} USDT</div>
               </div>
             )}
             {listing.serviceType === 'va_service' && (
               <div className="bg-zinc-800/50 p-4 rounded-2xl border border-zinc-800">
-                <div className="text-zinc-500 text-xs mb-1 uppercase font-bold tracking-tighter">Monthly</div>
-                <div className="text-2xl font-bold text-white">{listing.vaMonthlyPrice} USDT</div>
+                <div className="text-zinc-500 text-xs mb-1 uppercase font-bold tracking-tighter">Sales Percentage</div>
+                <div className="text-2xl font-bold text-white">{listing.vaSalesPercentage}%</div>
               </div>
             )}
             <div className="bg-zinc-800/50 p-4 rounded-2xl border border-zinc-800">

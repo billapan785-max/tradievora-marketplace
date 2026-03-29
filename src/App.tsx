@@ -18,7 +18,6 @@ import Privacy from './pages/Privacy';
 import Disputes from './pages/Disputes';
 import Profile from './pages/Profile';
 import MobileProfilePage from './pages/MobileProfilePage';
-import Reviews from './pages/Reviews';
 import SellerProfile from './pages/SellerProfile';
 import Login from './pages/Login';
 import Register from './pages/Register';
@@ -63,7 +62,6 @@ export default function App() {
               <Route path="/profile/:uid" element={<Profile />} />
               <Route path="/mobile-profile" element={<ProtectedRoute><MobileProfilePage /></ProtectedRoute>} />
               <Route path="/seller/:id" element={<SellerProfile />} />
-              <Route path="/reviews" element={<Reviews />} />
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
               

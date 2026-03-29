@@ -431,7 +431,7 @@ const Messages: React.FC = () => {
 
   if (!orderId && !listingId) {
     return (
-      <div className="w-full h-[calc(100vh-64px)] md:h-[calc(100vh-180px)] md:max-w-4xl md:mx-auto md:rounded-3xl flex flex-col bg-zinc-900 border border-zinc-800 overflow-hidden shadow-2xl relative">
+      <div className="w-full h-[calc(100dvh-232px)] md:h-[calc(100vh-180px)] md:max-w-4xl md:mx-auto md:rounded-3xl flex flex-col bg-zinc-900 border border-zinc-800 overflow-hidden shadow-2xl relative">
         <div className="p-6 border-b border-zinc-800 flex items-center justify-between">
           <h2 className="text-2xl font-bold text-white flex items-center gap-3">
             <MessageSquare className="h-6 w-6 text-orange-500" />
@@ -495,7 +495,7 @@ const Messages: React.FC = () => {
   }
 
   return (
-    <div className="w-full h-[calc(100vh-64px)] md:h-[calc(100vh-180px)] md:max-w-4xl md:mx-auto md:rounded-3xl flex flex-col bg-zinc-900 border border-zinc-800 overflow-hidden shadow-2xl relative">
+    <div className="w-full h-[calc(100dvh-232px)] md:h-[calc(100vh-180px)] md:max-w-4xl md:mx-auto md:rounded-3xl flex flex-col bg-zinc-900 border border-zinc-800 overflow-hidden shadow-2xl relative">
       {/* Header */}
       <div className="p-4 md:p-6 border-b border-zinc-800 bg-zinc-900/50 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center">
@@ -543,21 +543,26 @@ const Messages: React.FC = () => {
       </div>
 
       {/* Messages Area */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 md:p-6 space-y-3 md:space-y-4 scroll-smooth">
-        {messages.map((msg) => (
+      <div ref={scrollRef} className="flex-1 overflow-y-auto p-3 md:p-6 flex flex-col space-y-3 md:space-y-4 scroll-smooth relative">
+        {messages.length === 0 && !loading && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <p className="text-zinc-600 text-sm italic">No messages yet. Start the conversation!</p>
+          </div>
+        )}
+        {messages.map((msg, index) => (
           <div
             key={msg.id}
-            className={`flex ${msg.senderId === profile?.uid ? 'justify-end' : 'justify-start'}`}
+            className={`flex ${msg.senderId === profile?.uid ? 'justify-end' : 'justify-start'} ${index === 0 ? 'mt-auto' : ''}`}
           >
             <div
-              className={`max-w-[85%] md:max-w-[75%] px-3 py-2 md:px-4 md:py-3 rounded-2xl text-[13px] md:text-sm ${
+              className={`max-w-[85%] md:max-w-[75%] px-3 py-2 md:px-4 md:py-3 rounded-2xl text-[13px] md:text-sm inline-block ${
                 msg.senderId === profile?.uid
                   ? 'bg-orange-600 text-white rounded-tr-none'
                   : 'bg-zinc-800 text-zinc-100 rounded-tl-none'
               }`}
             >
-              <p className="leading-relaxed">
-              {msg.type === 'voice' && <audio controls src={msg.audio} className="max-w-full" />}
+              <div className="leading-relaxed break-words">
+                {msg.type === 'voice' && <audio controls src={msg.audio} className="max-w-full h-8 md:h-10" />}
                 {msg.type === 'text' && msg.text}
                 {msg.type === 'image' && <img src={msg.url} alt="Message" className="max-w-full rounded-lg" />}
                 {msg.type === 'video' && <video src={msg.url} controls className="max-w-full rounded-lg" />}
@@ -567,32 +572,27 @@ const Messages: React.FC = () => {
                     Download File
                   </a>
                 )}
-              </p>
-              <div className={`text-[10px] mt-2 opacity-50 ${msg.senderId === profile?.uid ? 'text-right' : 'text-left'}`}>
+              </div>
+              <div className={`text-[10px] mt-1 opacity-50 ${msg.senderId === profile?.uid ? 'text-right' : 'text-left'}`}>
                 {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
               </div>
             </div>
           </div>
         ))}
         {isOtherUserTyping && (
-          <div className="flex justify-start">
-            <div className="bg-zinc-800/50 text-zinc-400 px-3 py-2 md:px-4 md:py-3 rounded-2xl rounded-tl-none text-xs italic flex items-center gap-1.5 w-fit">
+          <div className={`flex justify-start ${messages.length === 0 ? 'mt-auto' : ''}`}>
+            <div className="bg-zinc-800/50 text-zinc-400 px-3 py-2 md:px-4 md:py-3 rounded-2xl rounded-tl-none text-xs italic inline-flex items-center gap-1.5">
               <span className="w-1.5 h-1.5 bg-zinc-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
               <span className="w-1.5 h-1.5 bg-zinc-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
               <span className="w-1.5 h-1.5 bg-zinc-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
             </div>
           </div>
         )}
-        {messages.length === 0 && !loading && (
-          <div className="text-center py-10">
-            <p className="text-zinc-600 text-sm italic">No messages yet. Start the conversation!</p>
-          </div>
-        )}
       </div>
 
       {/* Input Area */}
-      <div className="p-4 md:p-6 border-t border-zinc-800 bg-zinc-900/50">
-        <form onSubmit={handleSendMessage} className="flex gap-2 md:gap-4 items-center">
+      <div className="p-2 md:p-4 border-t border-zinc-800 bg-zinc-900/50">
+        <form onSubmit={handleSendMessage} className="flex gap-1.5 md:gap-3 items-end">
           <input
             type="file"
             accept="image/*,application/pdf,application/zip,application/vnd.openxmlformats-officedocument.wordprocessingml.document,video/mp4"
@@ -601,35 +601,47 @@ const Messages: React.FC = () => {
             id="file-upload"
             disabled={uploading}
           />
-          <label htmlFor="file-upload" className={`cursor-pointer flex-shrink-0 bg-zinc-800 hover:bg-zinc-700 text-white p-2 md:p-3 rounded-xl transition-all flex items-center justify-center ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
-            <Paperclip className="h-5 w-5 md:h-6 md:w-6" />
+          <label htmlFor="file-upload" className={`cursor-pointer flex-shrink-0 bg-zinc-800 hover:bg-zinc-700 text-white p-2 md:p-3 rounded-xl transition-all flex items-center justify-center h-10 w-10 min-w-[40px] md:h-12 md:w-12 md:min-w-[48px] ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
+            <Paperclip className="h-4 w-4 md:h-5 md:w-5" />
           </label>
           <button
             type="button"
             onClick={isRecording ? stopRecording : startRecording}
-            className={`p-2 md:p-3 flex-shrink-0 rounded-xl transition-all flex items-center justify-center min-w-[40px] md:min-w-[48px] ${isRecording ? 'bg-red-600 animate-pulse' : 'bg-zinc-800 hover:bg-zinc-700 text-white'}`}
+            className={`flex-shrink-0 rounded-xl transition-all flex items-center justify-center h-10 w-10 min-w-[40px] md:h-12 md:w-12 md:min-w-[48px] ${isRecording ? 'bg-red-600 animate-pulse' : 'bg-zinc-800 hover:bg-zinc-700 text-white'}`}
             title={isRecording ? "Stop Recording" : "Start Recording"}
           >
-            {isRecording ? <Square className="h-5 w-5 md:h-6 md:w-6 fill-current" /> : <Mic className="h-5 w-5 md:h-6 md:w-6" />}
+            {isRecording ? <Square className="h-4 w-4 md:h-5 md:w-5 fill-current" /> : <Mic className="h-4 w-4 md:h-5 md:w-5" />}
           </button>
-          <input
-            type="text"
-            placeholder="Type your message securely..."
-            className="flex-1 min-w-0 bg-zinc-800 border border-zinc-700 rounded-xl py-2 px-3 md:py-3 md:px-4 text-sm md:text-base text-white focus:outline-none focus:border-orange-500 transition-colors"
-            value={inputText}
-            onChange={(e) => {
-              setInputText(e.target.value);
-              updateTypingStatus(e.target.value.length > 0);
-            }}
-          />
+          <div className="flex-1 min-w-0 relative">
+            <textarea
+              rows={1}
+              placeholder={isRecording ? "Recording..." : "Type a message..."}
+              disabled={isRecording}
+              className={`w-full bg-zinc-800 border border-zinc-700 rounded-xl py-2.5 px-3 md:py-3 md:px-4 text-sm md:text-base text-white focus:outline-none focus:border-orange-500 transition-colors resize-none overflow-hidden min-h-[40px] md:min-h-[48px] max-h-[120px] ${isRecording ? 'opacity-50 cursor-not-allowed' : ''}`}
+              value={inputText}
+              onChange={(e) => {
+                setInputText(e.target.value);
+                updateTypingStatus(e.target.value.length > 0);
+                e.target.style.height = 'auto';
+                e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`;
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSendMessage(e);
+                }
+              }}
+            />
+          </div>
           <button
             type="submit"
-            className="bg-orange-600 flex-shrink-0 hover:bg-orange-700 text-white p-2 md:p-3 rounded-xl transition-all flex items-center justify-center"
+            disabled={(!inputText.trim() && !uploading) || isRecording}
+            className="bg-orange-600 flex-shrink-0 hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl transition-all flex items-center justify-center h-10 w-10 min-w-[40px] md:h-12 md:w-12 md:min-w-[48px]"
           >
-            <Send className="h-5 w-5 md:h-6 md:w-6" />
+            <Send className="h-4 w-4 md:h-5 md:w-5" />
           </button>
         </form>
-        <p className="text-[10px] text-zinc-600 mt-3 text-center uppercase font-bold tracking-widest">
+        <p className="text-[9px] md:text-[10px] text-zinc-600 mt-2 text-center uppercase font-bold tracking-widest px-2">
           Messages are monitored for security. Sharing contact info will lead to suspension.
         </p>
       </div>

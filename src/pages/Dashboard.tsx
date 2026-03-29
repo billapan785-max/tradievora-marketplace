@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, where, onSnapshot, addDoc, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, addDoc, doc, updateDoc, deleteDoc, getDoc } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { useAuth } from '../AuthContext';
-import { Listing, Order } from '../types';
+import { Listing, Order, PlatformSettings } from '../types';
 import { Plus, Package, ShoppingBag, TrendingUp, Edit, Trash2, ExternalLink, Shield, BadgeCheck } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -14,7 +14,16 @@ const Dashboard: React.FC = () => {
   const [myListings, setMyListings] = useState<Listing[]>([]);
   const [mySales, setMySales] = useState<Order[]>([]);
   const [myOrders, setMyOrders] = useState<Order[]>([]);
+  const [settings, setSettings] = useState<PlatformSettings | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const defaultCategories = [
+    'eBay Accounts', 'Walmart Accounts', 'Amazon Accounts', 
+    'TikTok Accounts', 'Facebook Accounts', 'Payment Gateways', 
+    'Services', 'Other'
+  ];
+  const categories = settings?.categories || defaultCategories;
+
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingListing, setEditingListing] = useState<Listing | null>(null);
@@ -29,7 +38,7 @@ const Dashboard: React.FC = () => {
     discountedPrice: '',
     isFlashSale: false,
     flashSaleEndsAt: '',
-    category: 'eBay Accounts',
+    category: categories[0] || 'eBay Accounts',
     deliveryMethod: 'Instant',
     deliveryTime: '1 Hour',
     isFeatured: false,
@@ -44,6 +53,20 @@ const Dashboard: React.FC = () => {
   });
   const [listingImage, setListingImage] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
+
+  useEffect(() => {
+    const fetchSettings = async () => {
+      try {
+        const settingsSnap = await getDoc(doc(db, 'settings', 'platform'));
+        if (settingsSnap.exists()) {
+          setSettings(settingsSnap.data() as PlatformSettings);
+        }
+      } catch (error) {
+        console.error('Error fetching settings:', error);
+      }
+    };
+    fetchSettings();
+  }, []);
 
   useEffect(() => {
     if (!profile) return;
@@ -607,40 +630,44 @@ const Dashboard: React.FC = () => {
                     onChange={e => setNewListing({...newListing, title: e.target.value})}
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-zinc-400 mb-2">Price (USDT)</label>
-                  <input
-                    type="number"
-                    required
-                    step="0.01"
-                    className="w-full bg-zinc-800 border border-zinc-700 rounded-xl py-3 px-4 text-white focus:outline-none focus:border-orange-500"
-                    placeholder="99.99"
-                    value={newListing.price}
-                    onChange={e => setNewListing({...newListing, price: e.target.value})}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-zinc-400 mb-2">Original Price (USDT) - Optional</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    className="w-full bg-zinc-800 border border-zinc-700 rounded-xl py-3 px-4 text-white focus:outline-none focus:border-orange-500"
-                    placeholder="129.99"
-                    value={newListing.originalPrice}
-                    onChange={e => setNewListing({...newListing, originalPrice: e.target.value})}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-zinc-400 mb-2">Discounted Price (USDT) - Optional</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    className="w-full bg-zinc-800 border border-zinc-700 rounded-xl py-3 px-4 text-white focus:outline-none focus:border-orange-500"
-                    placeholder="79.99"
-                    value={newListing.discountedPrice}
-                    onChange={e => setNewListing({...newListing, discountedPrice: e.target.value})}
-                  />
-                </div>
+                {newListing.serviceType === 'fixed' && (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-zinc-400 mb-2">Price (USDT)</label>
+                      <input
+                        type="number"
+                        required
+                        step="0.01"
+                        className="w-full bg-zinc-800 border border-zinc-700 rounded-xl py-3 px-4 text-white focus:outline-none focus:border-orange-500"
+                        placeholder="99.99"
+                        value={newListing.price}
+                        onChange={e => setNewListing({...newListing, price: e.target.value})}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-zinc-400 mb-2">Original Price (USDT) - Optional</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        className="w-full bg-zinc-800 border border-zinc-700 rounded-xl py-3 px-4 text-white focus:outline-none focus:border-orange-500"
+                        placeholder="129.99"
+                        value={newListing.originalPrice}
+                        onChange={e => setNewListing({...newListing, originalPrice: e.target.value})}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-zinc-400 mb-2">Discounted Price (USDT) - Optional</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        className="w-full bg-zinc-800 border border-zinc-700 rounded-xl py-3 px-4 text-white focus:outline-none focus:border-orange-500"
+                        placeholder="79.99"
+                        value={newListing.discountedPrice}
+                        onChange={e => setNewListing({...newListing, discountedPrice: e.target.value})}
+                      />
+                    </div>
+                  </>
+                )}
                 <div className="flex items-center">
                   <input
                     type="checkbox"
@@ -672,14 +699,9 @@ const Dashboard: React.FC = () => {
                     value={newListing.category}
                     onChange={e => setNewListing({...newListing, category: e.target.value})}
                   >
-                    <option>eBay Accounts</option>
-                    <option>Walmart Accounts</option>
-                    <option>Amazon Accounts</option>
-                    <option>TikTok Accounts</option>
-                    <option>Facebook Accounts</option>
-                    <option>Payment Gateways</option>
-                    <option>Services</option>
-                    <option>Other</option>
+                    {categories.map(cat => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
                   </select>
                 </div>
                 <div>
@@ -881,40 +903,44 @@ const Dashboard: React.FC = () => {
                     onChange={e => setNewListing({...newListing, title: e.target.value})}
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-zinc-400 mb-2">Price (USDT)</label>
-                  <input
-                    type="number"
-                    required
-                    step="0.01"
-                    className="w-full bg-zinc-800 border border-zinc-700 rounded-xl py-3 px-4 text-white focus:outline-none focus:border-orange-500"
-                    placeholder="99.99"
-                    value={newListing.price}
-                    onChange={e => setNewListing({...newListing, price: e.target.value})}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-zinc-400 mb-2">Original Price (USDT) - Optional</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    className="w-full bg-zinc-800 border border-zinc-700 rounded-xl py-3 px-4 text-white focus:outline-none focus:border-orange-500"
-                    placeholder="129.99"
-                    value={newListing.originalPrice}
-                    onChange={e => setNewListing({...newListing, originalPrice: e.target.value})}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-zinc-400 mb-2">Discounted Price (USDT) - Optional</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    className="w-full bg-zinc-800 border border-zinc-700 rounded-xl py-3 px-4 text-white focus:outline-none focus:border-orange-500"
-                    placeholder="79.99"
-                    value={newListing.discountedPrice}
-                    onChange={e => setNewListing({...newListing, discountedPrice: e.target.value})}
-                  />
-                </div>
+                {newListing.serviceType === 'fixed' && (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-zinc-400 mb-2">Price (USDT)</label>
+                      <input
+                        type="number"
+                        required
+                        step="0.01"
+                        className="w-full bg-zinc-800 border border-zinc-700 rounded-xl py-3 px-4 text-white focus:outline-none focus:border-orange-500"
+                        placeholder="99.99"
+                        value={newListing.price}
+                        onChange={e => setNewListing({...newListing, price: e.target.value})}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-zinc-400 mb-2">Original Price (USDT) - Optional</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        className="w-full bg-zinc-800 border border-zinc-700 rounded-xl py-3 px-4 text-white focus:outline-none focus:border-orange-500"
+                        placeholder="129.99"
+                        value={newListing.originalPrice}
+                        onChange={e => setNewListing({...newListing, originalPrice: e.target.value})}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-zinc-400 mb-2">Discounted Price (USDT) - Optional</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        className="w-full bg-zinc-800 border border-zinc-700 rounded-xl py-3 px-4 text-white focus:outline-none focus:border-orange-500"
+                        placeholder="79.99"
+                        value={newListing.discountedPrice}
+                        onChange={e => setNewListing({...newListing, discountedPrice: e.target.value})}
+                      />
+                    </div>
+                  </>
+                )}
                 <div className="flex items-center">
                   <input
                     type="checkbox"
@@ -946,14 +972,9 @@ const Dashboard: React.FC = () => {
                     value={newListing.category}
                     onChange={e => setNewListing({...newListing, category: e.target.value})}
                   >
-                    <option>eBay Accounts</option>
-                    <option>Walmart Accounts</option>
-                    <option>Amazon Accounts</option>
-                    <option>TikTok Accounts</option>
-                    <option>Facebook Accounts</option>
-                    <option>Payment Gateways</option>
-                    <option>Services</option>
-                    <option>Other</option>
+                    {categories.map(cat => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
                   </select>
                 </div>
                 <div>

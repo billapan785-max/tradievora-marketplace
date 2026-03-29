@@ -66,6 +66,7 @@ const AdminPanel: React.FC = () => {
   const [searchTermOrders, setSearchTermOrders] = useState('');
   const [searchTermListings, setSearchTermListings] = useState('');
   const [modalInput, setModalInput] = useState('');
+  const [newCategory, setNewCategory] = useState('');
 
   useEffect(() => {
     if (profile?.role !== 'admin') return;
@@ -1705,6 +1706,86 @@ const AdminPanel: React.FC = () => {
                     onChange={e => setSettings({...settings, bannerImageUrl: e.target.value})}
                   />
                   <p className="text-[10px] text-zinc-500 mt-1 uppercase font-bold tracking-wider">Recommended size: 1920x600px or 1920x800px for best fit.</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-8 border-t border-zinc-800">
+              <h3 className="text-lg font-bold text-white mb-6">Listing Categories</h3>
+              <div className="space-y-4">
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="New Category Name"
+                    className="flex-1 bg-zinc-800 border border-zinc-700 rounded-xl py-3 px-4 text-white focus:outline-none focus:border-orange-500"
+                    value={newCategory}
+                    onChange={e => setNewCategory(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' && newCategory.trim()) {
+                        e.preventDefault();
+                        const currentCategories = settings.categories || [
+                          'eBay Accounts', 'Walmart Accounts', 'Amazon Accounts', 
+                          'TikTok Accounts', 'Facebook Accounts', 'Payment Gateways', 
+                          'Services', 'Other'
+                        ];
+                        if (!currentCategories.includes(newCategory.trim())) {
+                          setSettings({
+                            ...settings,
+                            categories: [...currentCategories, newCategory.trim()]
+                          });
+                        }
+                        setNewCategory('');
+                      }
+                    }}
+                  />
+                  <button
+                    onClick={() => {
+                      if (newCategory.trim()) {
+                        const currentCategories = settings.categories || [
+                          'eBay Accounts', 'Walmart Accounts', 'Amazon Accounts', 
+                          'TikTok Accounts', 'Facebook Accounts', 'Payment Gateways', 
+                          'Services', 'Other'
+                        ];
+                        if (!currentCategories.includes(newCategory.trim())) {
+                          setSettings({
+                            ...settings,
+                            categories: [...currentCategories, newCategory.trim()]
+                          });
+                        }
+                        setNewCategory('');
+                      }
+                    }}
+                    className="px-6 py-3 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl font-bold transition-all"
+                  >
+                    Add
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-2 mt-4">
+                  {(settings.categories || [
+                    'eBay Accounts', 'Walmart Accounts', 'Amazon Accounts', 
+                    'TikTok Accounts', 'Facebook Accounts', 'Payment Gateways', 
+                    'Services', 'Other'
+                  ]).map((category, index) => (
+                    <div key={index} className="flex items-center gap-2 bg-zinc-800/50 border border-zinc-700 rounded-full px-4 py-2">
+                      <span className="text-zinc-300 text-sm">{category}</span>
+                      <button
+                        onClick={() => {
+                          const currentCategories = settings.categories || [
+                            'eBay Accounts', 'Walmart Accounts', 'Amazon Accounts', 
+                            'TikTok Accounts', 'Facebook Accounts', 'Payment Gateways', 
+                            'Services', 'Other'
+                          ];
+                          setSettings({
+                            ...settings,
+                            categories: currentCategories.filter(c => c !== category)
+                          });
+                        }}
+                        className="text-zinc-500 hover:text-red-500 transition-colors"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>

@@ -136,7 +136,7 @@ const HelpCenter: React.FC = () => {
         </div>
       </div>
 
-      <div className="bg-zinc-900 border border-zinc-800 rounded-3xl overflow-hidden flex flex-col h-[calc(100vh-180px)] relative">
+      <div className="bg-zinc-900 border border-zinc-800 rounded-3xl overflow-hidden flex flex-col h-[calc(100dvh-232px)] md:h-[calc(100vh-180px)] relative">
         {/* Chat Header */}
         <div className="p-4 border-b border-zinc-800 bg-zinc-900/50 flex items-center justify-between">
           <div className="flex items-center space-x-3">

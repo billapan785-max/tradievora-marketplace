@@ -1,12 +1,36 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Logo } from './Logo';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../lib/firebase';
+import { PlatformSettings } from '../types';
 
 interface FooterProps {
   className?: string;
 }
 
 const Footer: React.FC<FooterProps> = ({ className }) => {
+  const [settings, setSettings] = useState<PlatformSettings | null>(null);
+
+  useEffect(() => {
+    const fetchSettings = async () => {
+      try {
+        const settingsSnap = await getDoc(doc(db, 'settings', 'platform'));
+        if (settingsSnap.exists()) {
+          setSettings(settingsSnap.data() as PlatformSettings);
+        }
+      } catch (error) {
+        console.error('Error fetching settings:', error);
+      }
+    };
+    fetchSettings();
+  }, []);
+
+  const defaultCategories = [
+    'eBay Accounts', 'Amazon Accounts', 'Social Media', 'Services'
+  ];
+
+  const displayCategories = settings?.categories?.slice(0, 4) || defaultCategories;
   return (
     <footer className={`bg-zinc-900 border-t border-zinc-800 py-12 mt-auto ${className}`}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -24,10 +48,9 @@ const Footer: React.FC<FooterProps> = ({ className }) => {
           <div>
             <h3 className="text-white font-semibold mb-4">Marketplace</h3>
             <ul className="space-y-2 text-sm text-zinc-400">
-              <li><Link to="/marketplace?cat=eBay" className="hover:text-orange-500">eBay Accounts</Link></li>
-              <li><Link to="/marketplace?cat=Amazon" className="hover:text-orange-500">Amazon Accounts</Link></li>
-              <li><Link to="/marketplace?cat=Social" className="hover:text-orange-500">Social Media</Link></li>
-              <li><Link to="/marketplace?cat=Services" className="hover:text-orange-500">Services</Link></li>
+              {displayCategories.map(cat => (
+                <li key={cat}><Link to={`/marketplace?cat=${cat}`} className="hover:text-orange-500">{cat}</Link></li>
+              ))}
             </ul>
           </div>
           <div>

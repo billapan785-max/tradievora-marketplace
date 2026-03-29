@@ -59,20 +59,12 @@ const MobileProfilePage: React.FC = () => {
           <div className="flex items-center"><Star className="h-5 w-5 mr-3 text-zinc-500" /> Leaderboard</div>
           <ChevronRight className="h-5 w-5 text-zinc-600" />
         </Link>
-        <Link to="/reviews" className="flex items-center justify-between p-4 bg-zinc-900 border border-zinc-800 rounded-xl text-white">
-          <div className="flex items-center"><Star className="h-5 w-5 mr-3 text-zinc-500" /> Reviews</div>
-          <ChevronRight className="h-5 w-5 text-zinc-600" />
-        </Link>
         <Link to="/influencer" className="flex items-center justify-between p-4 bg-zinc-900 border border-zinc-800 rounded-xl text-white">
           <div className="flex items-center"><Zap className="h-5 w-5 mr-3 text-zinc-500" /> Earn USDT</div>
           <ChevronRight className="h-5 w-5 text-zinc-600" />
         </Link>
         <Link to="/influencer" className="flex items-center justify-between p-4 bg-zinc-900 border border-zinc-800 rounded-xl text-white">
           <div className="flex items-center"><Users className="h-5 w-5 mr-3 text-zinc-500" /> Influencer Program</div>
-          <ChevronRight className="h-5 w-5 text-zinc-600" />
-        </Link>
-        <Link to="/settings" className="flex items-center justify-between p-4 bg-zinc-900 border border-zinc-800 rounded-xl text-white">
-          <div className="flex items-center"><Settings className="h-5 w-5 mr-3 text-zinc-500" /> Settings</div>
           <ChevronRight className="h-5 w-5 text-zinc-600" />
         </Link>
         {profile?.role === 'admin' && (

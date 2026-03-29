@@ -4,39 +4,30 @@ import { Shield, Zap, Lock, ArrowRight, Star, CheckCircle, MessageSquare } from 
 import { motion } from 'motion/react';
 import { collection, query, orderBy, limit, getDocs, doc, getDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import { Review, PlatformSettings } from '../types';
+import { PlatformSettings } from '../types';
 
 const Home: React.FC = () => {
-  const [recentReviews, setRecentReviews] = useState<Review[]>([]);
   const [settings, setSettings] = useState<PlatformSettings | null>(null);
-  const categories = [
-    { name: 'eBay Accounts', icon: '📦', count: '150+' },
-    { name: 'Walmart Accounts', icon: '🛒', count: '80+' },
-    { name: 'Amazon Accounts', icon: '🛍️', count: '120+' },
-    { name: 'TikTok Accounts', icon: '📱', count: '300+' },
-    { name: 'Facebook Accounts', icon: '👥', count: '200+' },
-    { name: 'Payment Gateways', icon: '💳', count: '45+' },
+  const defaultCategories = [
+    { name: 'eBay Accounts', icon: '📦' },
+    { name: 'Walmart Accounts', icon: '🛒' },
+    { name: 'Amazon Accounts', icon: '🛍️' },
+    { name: 'TikTok Accounts', icon: '📱' },
+    { name: 'Facebook Accounts', icon: '👥' },
+    { name: 'Payment Gateways', icon: '💳' },
+    { name: 'Services', icon: '🛠️' },
+    { name: 'Other', icon: '📁' }
   ];
 
-  useEffect(() => {
-    const fetchRecentReviews = async () => {
-      try {
-        const q = query(
-          collection(db, 'reviews'),
-          orderBy('createdAt', 'desc'),
-          limit(3)
-        );
-        const snapshot = await getDocs(q);
-        const fetchedReviews = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        })) as Review[];
-        setRecentReviews(fetchedReviews);
-      } catch (error) {
-        console.error('Error fetching recent reviews:', error);
-      }
+  const displayCategories = settings?.categories?.map(catName => {
+    const defaultCat = defaultCategories.find(c => c.name === catName);
+    return {
+      name: catName,
+      icon: defaultCat ? defaultCat.icon : '🏷️'
     };
+  }) || defaultCategories;
 
+  useEffect(() => {
     const fetchSettings = async () => {
       try {
         const settingsSnap = await getDoc(doc(db, 'settings', 'platform'));
@@ -48,7 +39,6 @@ const Home: React.FC = () => {
       }
     };
 
-    fetchRecentReviews();
     fetchSettings();
   }, []);
 
@@ -119,7 +109,7 @@ const Home: React.FC = () => {
           </Link>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-          {categories.map((cat) => (
+          {displayCategories.map((cat) => (
             <Link
               key={cat.name}
               to={`/marketplace?cat=${cat.name}`}
@@ -127,7 +117,7 @@ const Home: React.FC = () => {
             >
               <div className="text-4xl mb-4 group-hover:scale-110 transition-transform">{cat.icon}</div>
               <h3 className="text-white font-semibold text-sm mb-1">{cat.name}</h3>
-              <p className="text-zinc-500 text-xs">{cat.count} Listings</p>
+              <p className="text-zinc-500 text-xs text-orange-500/80 group-hover:text-orange-500 transition-colors">Browse</p>
             </Link>
           ))}
         </div>
@@ -163,48 +153,6 @@ const Home: React.FC = () => {
           </p>
         </div>
       </section>
-
-      {/* Recent Reviews Section */}
-      {recentReviews.length > 0 && (
-        <section>
-          <div className="flex justify-between items-end mb-12">
-            <div>
-              <h2 className="text-3xl font-bold text-white">Recent Feedback</h2>
-              <p className="text-zinc-400 mt-2">See what our community is saying</p>
-            </div>
-            <Link to="/reviews" className="text-orange-500 hover:text-orange-400 font-medium flex items-center">
-              View All Reviews <ArrowRight className="ml-1 h-4 w-4" />
-            </Link>
-          </div>
-          <div className="grid md:grid-cols-3 gap-6">
-            {recentReviews.map((review) => (
-              <div key={review.id} className="bg-zinc-900 border border-zinc-800 p-6 rounded-3xl">
-                <div className="flex items-center mb-4">
-                  <div className="h-10 w-10 bg-zinc-800 rounded-xl flex items-center justify-center text-orange-500 font-bold">
-                    {review.fromName?.charAt(0) || 'U'}
-                  </div>
-                  <div className="ml-3">
-                    <div className="text-white font-bold text-sm">{review.fromName || 'Anonymous'}</div>
-                    <div className="flex items-center mt-0.5">
-                      {[...Array(5)].map((_, i) => (
-                        <Star
-                          key={i}
-                          className={`h-3 w-3 ${
-                            i < review.rating ? 'text-orange-500 fill-current' : 'text-zinc-700'
-                          }`}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                </div>
-                <p className="text-zinc-400 text-sm italic leading-relaxed">
-                  "{review.comment.length > 120 ? review.comment.slice(0, 120) + '...' : review.comment}"
-                </p>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
 
       {/* Influencer Program Section */}
       <section className="py-12">

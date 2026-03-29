@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, where, onSnapshot, orderBy } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, orderBy, getDoc, doc } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
-import { Listing, Review } from '../types';
+import { Listing, Review, PlatformSettings } from '../types';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { Search, Filter, Tag, Clock, User, Star, BadgeCheck, ChevronDown } from 'lucide-react';
 
@@ -12,17 +12,32 @@ const Marketplace: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [reviews, setReviews] = useState<Review[]>([]);
   const [isCategoryMenuOpen, setIsCategoryMenuOpen] = useState(false);
+  const [settings, setSettings] = useState<PlatformSettings | null>(null);
   const navigate = useNavigate();
   
   const categoryFilter = searchParams.get('cat') || 'All';
 
-  const categories = [
-    'All', 'eBay Accounts', 'Walmart Accounts', 'Amazon Accounts', 
+  const defaultCategories = [
+    'eBay Accounts', 'Walmart Accounts', 'Amazon Accounts', 
     'TikTok Accounts', 'Facebook Accounts', 'Payment Gateways', 
-    'Dropshipping Stores', 'Order Processing Services', 'Account Creation Services', 'Other'
+    'Services', 'Other'
   ];
 
+  const categories = ['All', ...(settings?.categories || defaultCategories)];
+
   useEffect(() => {
+    const fetchSettings = async () => {
+      try {
+        const settingsSnap = await getDoc(doc(db, 'settings', 'platform'));
+        if (settingsSnap.exists()) {
+          setSettings(settingsSnap.data() as PlatformSettings);
+        }
+      } catch (error) {
+        console.error('Error fetching settings:', error);
+      }
+    };
+    fetchSettings();
+
     const unsubReviews = onSnapshot(collection(db, 'reviews'), (snapshot) => {
       setReviews(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Review)));
     }, (error) => {
@@ -227,17 +242,34 @@ const Marketplace: React.FC = () => {
                   <div className="px-4 md:px-6 py-3 md:py-4 bg-zinc-800/50 border-t border-zinc-800 flex items-center justify-between">
                     <div className="flex flex-col">
                       <div className="text-lg md:text-xl font-bold text-white">
-                        {listing.isFlashSale && listing.flashSaleEndsAt && new Date(listing.flashSaleEndsAt) > new Date() && listing.discountedPrice ? (
-                          listing.discountedPrice
-                        ) : listing.discountedPrice ? (
-                          listing.discountedPrice
+                        {listing.serviceType === 'percentage' || listing.serviceType === 'refund_percentage' ? (
+                          <>
+                            {listing.percentageRate}% <span className="text-xs text-zinc-500 font-normal">Fee</span>
+                          </>
+                        ) : listing.serviceType === 'va_service' ? (
+                          <>
+                            {listing.vaMonthlyPrice} <span className="text-xs text-zinc-500 font-normal">USDT/mo</span>
+                          </>
                         ) : (
-                          listing.price
-                        )} <span className="text-xs text-zinc-500 font-normal">USDT</span>
+                          <>
+                            {listing.isFlashSale && listing.flashSaleEndsAt && new Date(listing.flashSaleEndsAt) > new Date() && listing.discountedPrice ? (
+                              listing.discountedPrice
+                            ) : listing.discountedPrice ? (
+                              listing.discountedPrice
+                            ) : (
+                              listing.price
+                            )} <span className="text-xs text-zinc-500 font-normal">USDT</span>
+                          </>
+                        )}
                       </div>
-                      {(listing.originalPrice || (listing.discountedPrice && listing.price)) && (
+                      {(listing.serviceType === 'fixed' || !listing.serviceType) && (listing.originalPrice || (listing.discountedPrice && listing.price)) && (
                         <div className="text-[10px] md:text-xs text-zinc-500 line-through">
                           {listing.originalPrice || listing.price} USDT
+                        </div>
+                      )}
+                      {listing.serviceType === 'va_service' && listing.vaSalesPercentage && (
+                        <div className="text-[10px] md:text-xs text-orange-500 font-medium">
+                          + {listing.vaSalesPercentage}% Sales Comm.
                         </div>
                       )}
                     </div>
