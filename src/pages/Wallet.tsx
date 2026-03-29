@@ -145,6 +145,7 @@ const Wallet: React.FC = () => {
         setShowTransferModal(false);
         setTransferAmount('');
       } catch (error) {
+        console.error('Transfer failed (available_to_seller):', error);
         toast.error('Transfer failed');
       }
     } else {
@@ -161,6 +162,7 @@ const Wallet: React.FC = () => {
         setShowTransferModal(false);
         setTransferAmount('');
       } catch (error) {
+        console.error('Transfer failed (seller_to_available):', error);
         toast.error('Transfer failed');
       }
     }

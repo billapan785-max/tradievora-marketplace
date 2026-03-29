@@ -23,7 +23,7 @@ export const uploadFile = async (file: File, folder: string, userId: string): Pr
   formData.append("folder", folder);
   formData.append("userId", userId);
 
-  const response = await fetch("/api/upload", {
+  const response = await fetch("/api/upload/", {
     method: "POST",
     body: formData,
   });

@@ -32,7 +32,7 @@ async function startServer() {
     res.json({ message: "API is working", method: req.method, url: req.url });
   });
 
-  app.post("/api/upload", upload.single("file"), async (req, res) => {
+  app.post(["/api/upload", "/api/upload/"], upload.single("file"), async (req, res) => {
     console.log("Upload request received. Body:", req.body);
     console.log("File info:", req.file ? {
       originalname: req.file.originalname,

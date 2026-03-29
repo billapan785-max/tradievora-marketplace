@@ -23,7 +23,7 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import { Toaster } from 'sonner';
 import SplashScreen from './components/SplashScreen';
-import ErrorBoundary from './components/ErrorBoundary';
+import ErrorBoundary from '@/src/components/ErrorBoundary';
 
 const ScrollToTop = () => {
   const { pathname } = useLocation();
