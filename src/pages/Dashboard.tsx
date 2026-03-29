@@ -208,6 +208,7 @@ const Dashboard: React.FC = () => {
       });
       setListingImage(null);
     } catch (error) {
+      console.error('Error creating listing:', error);
       toast.error('Failed to create listing');
     } finally {
       setUploading(false);
@@ -865,9 +866,10 @@ const Dashboard: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-4 bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-bold transition-all"
+                  disabled={uploading}
+                  className="flex-1 py-4 bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-bold transition-all disabled:opacity-50"
                 >
-                  Create Listing
+                  {uploading ? 'Creating...' : 'Create Listing'}
                 </button>
               </div>
             </form>
